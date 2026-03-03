@@ -1,15 +1,19 @@
-<div align="center"><img src="https://raw.githubusercontent.com/187J3X1-114514/superresolution/refs/heads/multi-version/common/src/main/resources/assets/super_resolution/logo.png" width="256"/></div>
-<div align="center"><img src="https://img.shields.io/github/forks/187J3X1-114514/superresolution"/>
-<img src="https://img.shields.io/github/stars/187J3X1-114514/superresolution"/>
-<img src="https://img.shields.io/github/license/187J3X1-114514/superresolution"/>
-<img src="https://img.shields.io/github/issues/187J3X1-114514/superresolution"/></div>
-
 <div align="center">
-<h1>Super Resolution</h1>
-<a href="docs/README_EN.md">English</a> <span>简体中文</span>
+    <img src="https://raw.githubusercontent.com/187J3X1-114514/superresolution/refs/heads/multi-version/common/src/main/resources/assets/super_resolution/logo.png" width="128"/>
+</div>
+<div align="center">
+    <img src="https://img.shields.io/github/forks/187J3X1-114514/superresolution"/>
+    <img src="https://img.shields.io/github/stars/187J3X1-114514/superresolution"/><br>
+    <img src="https://img.shields.io/github/license/187J3X1-114514/superresolution"/>
+    <img src="https://img.shields.io/github/issues/187J3X1-114514/superresolution"/>
+    <img src="https://img.shields.io/github/issues-pr/187J3X1-114514/superresolution">
+</div>
+<div align="center">
+    <h1>Super Resolution</h1>
+    <a href="docs/README_EN.md">English</a> <span>简体中文</span>
 </div>
 
-----
+---
 
 在Minecraft中内置超分辨率算法，以提升性能/画质
 
@@ -23,8 +27,7 @@
 
 # 其它功能
 
-*
-光影包内的超分辨率支持，[文档](https://github.com/187J3X1-114514/superresolution/wiki/Shaderpack-Interface-documentation)
+* 光影包内的超分辨率支持。[文档](https://github.com/187J3X1-114514/superresolution/wiki/Shaderpack-Interface-documentation)
 
 # 兼容性
 
@@ -54,7 +57,7 @@
 
 * 支持OpenGL版本 4.3 及以上
 * 支持OpenGL扩展 `GL_ARB_direct_state_access` `GL_ARB_gl_spirv` `GL_ARB_clear_texture`
-* 支持Vulkan版本 >= 1.2
+* 支持Vulkan版本 1.2 及以上
 
 ### 最低
 
