@@ -127,12 +127,12 @@ public class IrisShaderCompatEventHandler {
 
         try {
             //检查renderTargets是不是null以及是否被销毁，否则1.21.5+会报Tried to use destroyed RenderTargets
-            if (((CompositeRendererAccessor) event.getCompositeRenderer()).getRenderTargets() != null) {
+            if ((event.getCompositeRenderer()).getRenderTargets() != null) {
                 if (
                         !(
                                 (RenderTargetsAccessor) (
                                         (
-                                                (CompositeRendererAccessor) event.getCompositeRenderer()
+                                                event.getCompositeRenderer()
                                         )
                                                 .getRenderTargets()
                                 )
@@ -178,10 +178,13 @@ public class IrisShaderCompatEventHandler {
 
 
         if (SuperResolutionConfig.isEnableUpscaleOriginal()) {
+            AlgorithmDescription<?> selectedAlgorithm = SuperResolution.algorithmDescription != null
+                ? SuperResolution.algorithmDescription
+                : SuperResolutionConfig.getUpscaleAlgorithm();
             event.registerMacro("SR_ENABLE", "1");
             event.registerMacro("SR_DISABLE", "0");
             event.registerMacro("SR_ALGO_SUPPORTS_JITTER",
-                    SuperResolution.getCurrentAlgorithm().isSupportJitter() ? "1" : "0");
+                AlgorithmManager.supportsJitter(selectedAlgorithm) ? "1" : "0");
             event.registerMacro("SR_USING_ALGO", Integer.toString(
                     idMap.get(SuperResolutionConfig.getUpscaleAlgorithm())));
             event.registerMacro("SR_SHOULD_APPLY_SCALE", "1");
@@ -197,10 +200,14 @@ public class IrisShaderCompatEventHandler {
                     Integer.toString(SuperResolutionAPI.getScreenHeight()));
             event.registerMacro("SR_UPSCALE_RATIO",
                     Float.toString(SuperResolutionConfig.getUpscaleRatio()));
+            event.registerMacro("SR_UPSCALE_RATIO_HALF",
+                    Float.toString(SuperResolutionConfig.getUpscaleRatio()*0.5F));
             event.registerMacro("SR_RENDER_SCALE_FACTOR",
                     Float.toString(SuperResolutionConfig.getRenderScaleFactor()));
+            event.registerMacro("SR_RENDER_SCALE_FACTOR_HALF",
+                    Float.toString(SuperResolutionConfig.getRenderScaleFactor()*0.5F));
             event.registerMacro("SR_JITTER_SEQUENCE_LENGTH",
-                    Integer.toString(AlgorithmManager.getJitterSequenceLength()));
+                    Integer.toString(AlgorithmManager.getConfiguredJitterSequenceLength()));
             event.registerMacro("SR_ALGO_DLSS_RENDERPRESET",
                     SuperResolutionConfig.getUpscaleAlgorithm().equals(AlgorithmDescriptions.DLSS) ?
                             Integer.toString(SuperResolutionConfig.SPECIAL.DLSS.RENDER_PRESET.get().getCode()) :

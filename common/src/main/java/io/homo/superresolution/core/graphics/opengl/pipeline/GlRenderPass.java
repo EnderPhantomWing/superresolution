@@ -23,7 +23,6 @@ import io.homo.superresolution.core.graphics.impl.framebuffer.ColorAttachment;
 import io.homo.superresolution.core.graphics.impl.framebuffer.FrameBufferBindPoint;
 import io.homo.superresolution.core.graphics.impl.framebuffer.IBindableFrameBuffer;
 import io.homo.superresolution.core.graphics.impl.framebuffer.IFrameBuffer;
-import io.homo.superresolution.core.graphics.impl.pipeline.GraphicsPipeline;
 import io.homo.superresolution.core.graphics.impl.pipeline.PassClearState;
 import io.homo.superresolution.core.graphics.impl.pipeline.RenderPass;
 import io.homo.superresolution.core.graphics.impl.vertex.IVertexBuffer;
@@ -32,8 +31,8 @@ import io.homo.superresolution.core.graphics.opengl.command.GlCommandBuffer;
 
 public class GlRenderPass extends RenderPass {
 
-    public GlRenderPass(GraphicsPipeline pipeline, IFrameBuffer frameBuffer, PassClearState clearState) {
-        super(pipeline, frameBuffer, clearState);
+    public GlRenderPass(IFrameBuffer frameBuffer, PassClearState clearState) {
+        super(frameBuffer, clearState);
     }
 
     public void bind() {
@@ -49,8 +48,7 @@ public class GlRenderPass extends RenderPass {
             if (clearState.shouldClearColorOnEnd(colorAttachment.index())) {
                 float[] color = clearState.getColorClearValueOnEnd(colorAttachment.index());
                 if (color != null) {
-                    commandBuffer.getDecoder().clearTextureRGBA(
-                            commandBuffer,
+                    commandBuffer.clearTextureRGBA(
                             colorAttachment.texture(),
                             color
                     );
@@ -59,16 +57,14 @@ public class GlRenderPass extends RenderPass {
         }
         if (clearState.shouldClearDepthOnEnd()) {
             float depth = clearState.getDepthClearValueOnEnd();
-            commandBuffer.getDecoder().clearTextureDepth(
-                    commandBuffer,
+            commandBuffer.clearTextureDepth(
                     depthStencilAttachment().texture(),
                     depth
             );
         }
         if (clearState.shouldClearStencilOnEnd()) {
             int stencil = clearState.getStencilClearValueOnEnd();
-            commandBuffer.getDecoder().clearTextureStencil(
-                    commandBuffer,
+            commandBuffer.clearTextureStencil(
                     depthStencilAttachment().texture(),
                     stencil
             );
@@ -80,8 +76,7 @@ public class GlRenderPass extends RenderPass {
             if (clearState.shouldClearColorOnBegin(colorAttachment.index())) {
                 float[] color = clearState.getColorClearValueOnBegin(colorAttachment.index());
                 if (color != null) {
-                    commandBuffer.getDecoder().clearTextureRGBA(
-                            commandBuffer,
+                    commandBuffer.clearTextureRGBA(
                             colorAttachment.texture(),
                             color
                     );
@@ -90,16 +85,14 @@ public class GlRenderPass extends RenderPass {
         }
         if (clearState.shouldClearDepthOnBegin()) {
             float depth = clearState.getDepthClearValueOnBegin();
-            commandBuffer.getDecoder().clearTextureDepth(
-                    commandBuffer,
+            commandBuffer.clearTextureDepth(
                     depthStencilAttachment().texture(),
                     depth
             );
         }
         if (clearState.shouldClearStencilOnBegin()) {
             int stencil = clearState.getStencilClearValueOnBegin();
-            commandBuffer.getDecoder().clearTextureStencil(
-                    commandBuffer,
+            commandBuffer.clearTextureStencil(
                     depthStencilAttachment().texture(),
                     stencil
             );

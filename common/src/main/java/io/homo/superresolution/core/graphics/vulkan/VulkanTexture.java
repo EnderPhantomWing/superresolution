@@ -20,18 +20,17 @@ package io.homo.superresolution.core.graphics.vulkan;
 
 import io.homo.superresolution.api.platform.OperatingSystemType;
 import io.homo.superresolution.core.graphics.impl.texture.*;
-import io.homo.superresolution.core.graphics.vulkan.utils.VulkanException;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import java.nio.LongBuffer;
 import java.util.Set;
 
-import static io.homo.superresolution.core.graphics.vulkan.utils.VulkanUtils.VK_CHECK;
+import static io.homo.superresolution.core.graphics.vulkan.VulkanUtils.VK_CHECK;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.VK11.*;
 
-public class VulkanTexture implements ITexture {
+public class VulkanTexture implements ITexture, VulkanLayoutTracked {
     private final VulkanDevice device;
     private final TextureDescription description;
     private final boolean isExternal;
@@ -165,9 +164,12 @@ public class VulkanTexture implements ITexture {
                 .memoryTypeIndex(findMemoryType(
                         memRequirements.memoryTypeBits(),
                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
-
+        VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = VkMemoryDedicatedAllocateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO)
+                .image(image);
+        allocInfo.pNext(dedicatedAllocInfo.address());
         if (exportable) {
-            allocInfo.pNext(VulkanInterop.IMPL.createVkExportMemoryAllocateInfo(stack).address());
+            dedicatedAllocInfo.pNext(VulkanInterop.IMPL.createVkExportMemoryAllocateInfo(stack).address());
         }
 
         LongBuffer pMemory = stack.mallocLong(1);
@@ -237,7 +239,7 @@ public class VulkanTexture implements ITexture {
         imageView = pImageView.get(0);
     }
 
-    private int getAspectMask() {
+    public int getAspectMask() {
         if (description.getFormat().isDepthStencil()) {
             return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
         } else if (description.getFormat().isDepth()) {
@@ -319,7 +321,6 @@ public class VulkanTexture implements ITexture {
         return exportedHandle;
     }
 
-    @Override
     public void resize(int newWidth, int newHeight) {
         if (newWidth == width && newHeight == height) {
             return;
@@ -351,7 +352,7 @@ public class VulkanTexture implements ITexture {
             return;
         }
         try (MemoryStack stack = stackPush()) {
-            VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1,stack)
+            VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack)
                     .sType(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER)
                     .oldLayout(currentLayout)
                     .newLayout(newLayout)
@@ -376,6 +377,14 @@ public class VulkanTexture implements ITexture {
             );
         }
         currentLayout = newLayout;
+    }
+
+    public int getCurrentLayout() {
+        return currentLayout;
+    }
+
+    public void setCurrentLayout(int layout) {
+        this.currentLayout = layout;
     }
 
     @Override

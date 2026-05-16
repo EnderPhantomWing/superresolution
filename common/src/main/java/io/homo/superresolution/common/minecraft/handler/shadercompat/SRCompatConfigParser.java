@@ -1,3 +1,21 @@
+/*
+ * Super Resolution
+ * Copyright (c) 2026. 187J3X1-114514
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package io.homo.superresolution.common.minecraft.handler.shadercompat;
 
 import com.google.gson.Gson;
@@ -81,6 +99,10 @@ public class SRCompatConfigParser {
                 if (rawProfile.upscale != null) {
                     // 校验 internal_format（允许为空，后续使用默认）
                     String internalFormat = rawProfile.upscale.internal_format;
+                    if (internalFormat != null && parseTextureFormat(internalFormat) == null) {
+                        SuperResolution.LOGGER.error("配置错误：profile '{}' 中 upscale.internal_format 非法: {}", worldKey, internalFormat);
+                        return null;
+                    }
 
                     // 校验 inputs
                     if (rawProfile.upscale.inputs != null) {
@@ -264,14 +286,12 @@ public class SRCompatConfigParser {
     }
 
     private static TextureFormat parseTextureFormat(String formatStr) {
-        if (formatStr == null) return TextureFormat.R11G11B10F;
+        if (formatStr == null) return null;
         return switch (formatStr.toLowerCase()) {
-            case "rgb8" -> TextureFormat.RGB8;
             case "rgba8" -> TextureFormat.RGBA8;
             case "rgba16f" -> TextureFormat.RGBA16F;
-            case "rgba16" -> TextureFormat.RGBA16;
-            case "rgb16f" -> TextureFormat.RGB16F;
-            default -> TextureFormat.R11G11B10F;
+            case "r11g11b10" -> TextureFormat.R11G11B10F;
+            default -> null;
         };
     }
 

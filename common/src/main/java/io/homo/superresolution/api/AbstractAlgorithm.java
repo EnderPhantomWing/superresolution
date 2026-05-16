@@ -18,43 +18,43 @@
 
 package io.homo.superresolution.api;
 
-import io.homo.superresolution.core.impl.Destroyable;
-import io.homo.superresolution.core.impl.Resizable;
+import io.homo.superresolution.common.upscale.DispatchResource;
 import io.homo.superresolution.core.graphics.impl.framebuffer.FrameBufferAttachmentType;
 import io.homo.superresolution.core.graphics.impl.framebuffer.IFrameBuffer;
-import io.homo.superresolution.common.upscale.DispatchResource;
+import io.homo.superresolution.core.impl.Destroyable;
 
 import java.util.List;
 
-public abstract class AbstractAlgorithm implements Resizable, Destroyable {
-    protected InputResourceSet getResources() {
-        return resources;
-    }
-
+public abstract class AbstractAlgorithm implements Destroyable {
     protected InputResourceSet resources;
-
-    /**
-     * 最近一次初始化时使用的描述，子类可在 {@code resize()} 等方法中复用。
-     */
     protected InitializationDescription initDesc = new InitializationDescription();
+    /** true 时下一次 dispatch 请求算法丢弃累积历史。新实例默认 true。 */
+    protected boolean needsHistoryReset = true;
 
     public AbstractAlgorithm() {
 
     }
 
-    /**
-     * 使用默认初始化描述初始化算法（从全局 {@link SuperResolutionAPI} 读取状态）。
-     * <p>由 {@link io.homo.superresolution.api.registry.AlgorithmDescription#createNewInstance()} 和普通创建路径调用。</p>
-     */
+    protected InputResourceSet getResources() {
+        return resources;
+    }
+
+    /** 读取并清除历史复位标志。 */
+    protected boolean consumeHistoryReset() {
+        boolean r = needsHistoryReset;
+        needsHistoryReset = false;
+        return r;
+    }
+
+    /** 令时序历史失效。世界加载/传送时调用。 */
+    public void invalidateHistory() {
+        needsHistoryReset = true;
+    }
+
     public final void initialize() {
         initialize(InitializationDescription.defaults());
     }
 
-    /**
-     * 初始化算法。
-     *
-     * @param desc 初始化描述，包含 HDR 标志等运行时配置。
-     */
     public abstract void initialize(InitializationDescription desc);
 
     /**
@@ -81,7 +81,6 @@ public abstract class AbstractAlgorithm implements Resizable, Destroyable {
      * @param width  新的宽度(游戏屏幕宽度)。
      * @param height 新的高度(游戏屏幕高度)。
      */
-    @Override
     public abstract void resize(int width, int height);
 
     /**

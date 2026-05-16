@@ -27,6 +27,9 @@ import io.homo.superresolution.api.config.values.single.BooleanValue;
 import io.homo.superresolution.api.config.values.single.EnumValue;
 import io.homo.superresolution.api.config.values.single.FloatValue;
 import io.homo.superresolution.api.config.values.single.StringValue;
+import io.homo.superresolution.api.platform.OperatingSystem;
+import io.homo.superresolution.api.platform.OperatingSystemType;
+import io.homo.superresolution.api.platform.Platform;
 import io.homo.superresolution.api.registry.AlgorithmDescription;
 import io.homo.superresolution.api.registry.AlgorithmRegistry;
 import io.homo.superresolution.common.SuperResolution;
@@ -35,16 +38,14 @@ import io.homo.superresolution.common.config.enums.InternalTextureFormat;
 import io.homo.superresolution.common.config.enums.InteropSyncMode;
 import io.homo.superresolution.common.config.special.SpecialConfigs;
 import io.homo.superresolution.common.minecraft.handler.RenderHandlerManager;
-import io.homo.superresolution.common.minecraft.handler.shadercompat.ShaderCompatHandler;
 import io.homo.superresolution.common.minecraft.handler.shadercompat.SRShaderCompatData;
-import io.homo.superresolution.api.platform.OperatingSystem;
-import io.homo.superresolution.api.platform.OperatingSystemType;
-import io.homo.superresolution.api.platform.Platform;
+import io.homo.superresolution.common.minecraft.handler.shadercompat.ShaderCompatHandler;
 import io.homo.superresolution.common.upscale.AlgorithmDescriptions;
 import io.homo.superresolution.core.SuperResolutionConstants;
 import io.homo.superresolution.core.graphics.GpuVendor;
 import io.homo.superresolution.core.graphics.GraphicsCapabilities;
 import io.homo.superresolution.core.graphics.impl.texture.TextureFormat;
+import io.homo.superresolution.core.graphics.opengl.GlDebug;
 import io.homo.superresolution.core.gui.MaterialTheme;
 import io.homo.superresolution.core.gui.SchemeVariant;
 import io.homo.superresolution.core.utils.Color;
@@ -234,8 +235,8 @@ public class SuperResolutionConfig {
                     }
                     return RenderSystem.isOnRenderThread() ? (
                             GraphicsCapabilities.detectGpuVendor() == GpuVendor.Intel ||
-                                    !GraphicsCapabilities.hasGLExtension("GL_ARB_gl_spirv") ||
-                                    (GraphicsCapabilities.getGLVersion()[0] >= 4 && GraphicsCapabilities.getGLVersion()[1] < 2)
+                            !GraphicsCapabilities.hasGLExtension("GL_ARB_gl_spirv") ||
+                            (GraphicsCapabilities.getGLVersion()[0] >= 4 && GraphicsCapabilities.getGLVersion()[1] < 2)
                     ) : false;
                 },
                 "This option enables the use of a compatibility shader compiler for compiling shaders when set to true."
@@ -287,14 +288,15 @@ public class SuperResolutionConfig {
         SPEC = builder.build();
         resolutionChangeCallback = () -> {
             RenderHandlerManager.resize();
-            SuperResolution.getInstance().resize(
-                    RenderHandlerManager.getScreenWidth(),
-                    RenderHandlerManager.getScreenHeight()
-            );
             Minecraft.getInstance().gameRenderer.resize(
                     RenderHandlerManager.getScreenWidth(),
                     RenderHandlerManager.getScreenHeight()
             );
+            SuperResolution.getInstance().forceResize(
+                    RenderHandlerManager.getScreenWidth(),
+                    RenderHandlerManager.getScreenHeight()
+            );
+
         };
     }
 
@@ -327,10 +329,16 @@ public class SuperResolutionConfig {
             UPSCALE_ALGO.set(algo.codeName);
         }
 
+        // rendering 初始化前不做 support 检查——Vulkan/GL caps 未就绪会误报，
+        // 旧实现里还会 setUpscaleAlgorithm 触发 createAlgorithm 级联失败。
+        if (!SuperResolution.isRenderingInitialized) {
+            return algo;
+        }
+
         if (!algo.requirement.check().support() && !Platform.currentPlatform.isDevelopmentEnvironment()) {
             SuperResolution.LOGGER.warn("算法 {} 不支持，回退到默认算法", algo.displayName);
             AlgorithmDescription<?> defaultAlgo = getDefaultAlgorithm();
-            setUpscaleAlgorithm(defaultAlgo);
+            UPSCALE_ALGO.set(defaultAlgo.codeName);
             return defaultAlgo;
         }
 
@@ -439,11 +447,12 @@ public class SuperResolutionConfig {
     }
 
     public static float getUpscaleRatio() {
-        return UPSCALE_RATIO.get();
+        return Math.max(UPSCALE_RATIO.get(), getMinUpscaleRatio());
     }
 
     public static void setUpscaleRatio(float value) {
         boolean resolutionChanged = getUpscaleRatio() != value;
+        value = Math.max(value, getMinUpscaleRatio());
         UPSCALE_RATIO.set(value);
         if (resolutionChanged) {
             resolutionChangeCallback.run();
@@ -536,6 +545,7 @@ public class SuperResolutionConfig {
 
     public static void setEnableDebug(boolean value) {
         ENABLE_DEBUG.set(value);
+        GlDebug.setEnabled(value);
     }
 
     public static boolean isForceDisableShaderCompat() {
@@ -551,7 +561,11 @@ public class SuperResolutionConfig {
     }
 
     public static void setDisableUpscaleOnVanilla(boolean value) {
+        boolean lastEnableUpscale = isEnableUpscale();
         DISABLE_UPSCALE_ON_VANILLA.set(value);
+        if (lastEnableUpscale != isEnableUpscale()) {
+            resolutionChangeCallback.run();
+        }
     }
 
     public static boolean isEnableExperimentalFeatures() {
@@ -605,8 +619,16 @@ public class SuperResolutionConfig {
     public static void setInteropSyncMode(InteropSyncMode value) {
         INTEROP_SYNC_MODE.set(value);
     }
+
     public static float getMinUpscaleRatio() {
         if (ShaderCompatHandler.dontHackMinecraftRenderingPipeline()) {
+            return 1.0f;
+        }
+        if (
+                getUpscaleAlgorithm().equals(AlgorithmDescriptions.DLSS) ||
+                        getUpscaleAlgorithm().equals(AlgorithmDescriptions.XESS)
+
+        ) {
             return 1.0f;
         }
         return 0.5f;
@@ -629,7 +651,7 @@ public class SuperResolutionConfig {
         }
     }
 
-    public  static void setThemeColor(Color color) {
+    public static void setThemeColor(Color color) {
         THEME_COLOR.set(color.hex());
     }
 

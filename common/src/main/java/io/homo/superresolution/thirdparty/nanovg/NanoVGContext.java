@@ -23,13 +23,23 @@ import java.util.List;
 
 public class NanoVGContext {
     private static final int DEFAULT_FLAGS = 0;
+    private static final NanoVGBackendMode DEFAULT_BACKEND_MODE = NanoVGBackendMode.RHI_DIRECT;
     private long nativeHandle;
 
     public NanoVGContext(int flags) {
-        this.nativeHandle = createContext(flags);
+        this(flags, DEFAULT_BACKEND_MODE);
+    }
+
+    public NanoVGContext(int flags, NanoVGBackendMode backendMode) {
+        NanoVGBackendMode resolvedMode = backendMode == null ? DEFAULT_BACKEND_MODE : backendMode;
+        this.nativeHandle = nCreateContextEx(flags, resolvedMode.getNativeValue());
         if (this.nativeHandle == 0) {
             throw new RuntimeException("Failed to create NanoVG context");
         }
+    }
+
+    public NanoVGContext(NanoVGBackendMode backendMode) {
+        this(DEFAULT_FLAGS, backendMode);
     }
 
     public NanoVGContext() {
@@ -37,6 +47,8 @@ public class NanoVGContext {
     }
 
     private static native long createContext(int flags);
+
+    private static native long nCreateContextEx(int flags, int backendMode);
 
     private static native void nDeleteContext(long ctx);
 
@@ -181,6 +193,8 @@ public class NanoVGContext {
     private static native void nTextAlign(long ctx, int align);
 
     private static native void nFontFaceId(long ctx, int font);
+    private static native void nFontSetVariationAxis(long ctx,int font, String axisTag, float value);
+    private static native String[] nFontGetVariationAxis(long ctx,int font);
 
     private static native void nFontFace(long ctx, String font);
 
@@ -522,6 +536,7 @@ public class NanoVGContext {
         return List.of(nTextGlyphPositions(nativeHandle, x, y, string));
     }
 
+
     public TextMetricsResult textMetrics() {
         return nTextMetrics(nativeHandle);
     }
@@ -529,6 +544,14 @@ public class NanoVGContext {
     public List<NVGtextRow> textBreakLines(String string, float breakRowWidth) {
         return List.of(nTextBreakLines(nativeHandle, string, breakRowWidth));
     }
+
+    public void fontSetVariationAxis(int font, String axisTag, float value){
+        nFontSetVariationAxis(nativeHandle,font,axisTag,value);
+    }
+    public List<String> fontGetVariationAxis(int font){
+        return List.of(nFontGetVariationAxis(nativeHandle,font));
+    }
+
 
     public void delete() {
         if (nativeHandle != 0) {

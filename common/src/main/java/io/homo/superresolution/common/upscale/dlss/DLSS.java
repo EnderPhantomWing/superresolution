@@ -22,17 +22,14 @@ import io.homo.superresolution.api.InitializationDescription;
 import io.homo.superresolution.api.QualityPreset;
 import io.homo.superresolution.common.SuperResolution;
 import io.homo.superresolution.common.config.SuperResolutionConfig;
-import io.homo.superresolution.common.debug.imgui.ImGuiLayer;
 import io.homo.superresolution.common.minecraft.handler.RenderHandlerManager;
-import io.homo.superresolution.common.upscale.DispatchResource;
 import io.homo.superresolution.common.upscale.SRApiAlgorithm;
 import io.homo.superresolution.core.NativeLibManager;
 import io.homo.superresolution.core.RenderSystems;
 import io.homo.superresolution.core.SuperResolutionConstants;
-import io.homo.superresolution.core.graphics.vulkan.VkGlInteropSemaphore;
 import io.homo.superresolution.core.graphics.vulkan.VulkanCommandBuffer;
 import io.homo.superresolution.core.graphics.vulkan.VulkanDevice;
-import io.homo.superresolution.core.graphics.vulkan.utils.VkReflectionHelper;
+import io.homo.superresolution.core.graphics.vulkan.VkReflectionHelper;
 import io.homo.superresolution.srapi.*;
 import net.minecraft.network.chat.Component;
 import org.joml.Vector2f;
@@ -123,13 +120,13 @@ public class DLSS extends SRApiAlgorithm {
         }
         commandBuffer.end();
         vulkanDevice.submitCommandBuffer(commandBuffer);
-        vulkanDevice.getMainQueue().waitIdle();
+        commandBuffer.waitForFence();
     }
 
     @Override
     protected void destroySRApiContext() {
         if (context != null) {
-            SRReturnCode code = SuperResolutionNativeAPI.srDestroyUpscaleContext(context);
+            SRReturnCode code = context.destroy();
             if (code != SRReturnCode.OK) {
                 SuperResolution.LOGGER.error("Failed to destroy upscale context. Return code: {}", code);
                 throw new RuntimeException("Failed to destroy upscale context");
@@ -163,7 +160,7 @@ public class DLSS extends SRApiAlgorithm {
         desc.setCameraFar(inFlightFrameResourcesSet.frameData.cameraFar());
         desc.setCameraFovAngleVertical(inFlightFrameResourcesSet.frameData.verticalFov());
         desc.setViewSpaceToMetersFactor(1.0f);
-        desc.setReset(false);
+        desc.setReset(consumeHistoryReset());
         desc.setFlags(0);
         SRReturnCode code = SuperResolutionNativeAPI.srDispatchUpscale(context, desc);
         if (code != SRReturnCode.OK) {

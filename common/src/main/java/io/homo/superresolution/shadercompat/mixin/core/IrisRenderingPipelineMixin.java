@@ -26,6 +26,13 @@ import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
+#if MC_VER >= MC_1_21_11
+import org.spongepowered.asm.mixin.Unique;
+import net.irisshaders.iris.shaderpack.properties.PackDirectives;
+import net.irisshaders.iris.targets.RenderTargets;
+import net.irisshaders.iris.gl.texture.DepthBufferFormat;
+import com.mojang.blaze3d.textures.GpuTexture;
+#endif
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -54,4 +61,43 @@ public class IrisRenderingPipelineMixin {
                 colorSpace
         );
     }
+
+    #if MC_VER >= MC_1_21_11
+    @Unique
+    private Object lastDepthTexture = null;
+
+    @Redirect(method = "beginLevelRendering", at = @At(value = "INVOKE", target = "Lnet/irisshaders/iris/targets/RenderTargets;resizeIfNeeded(ILcom/mojang/blaze3d/textures/GpuTexture;IILnet/irisshaders/iris/gl/texture/DepthBufferFormat;Lnet/irisshaders/iris/shaderpack/properties/PackDirectives;)Z"), remap = false)
+    private boolean patch(
+            RenderTargets instance,
+            int newDepthBufferVersion,
+            GpuTexture newDepthTextureId,
+            int newWidth,
+            int newHeight,
+            DepthBufferFormat newDepthFormat,
+            PackDirectives packDirectives
+    ) {
+        //由于SR在窗口大小更改后会resize framebuffer（sr自己的）
+        //然后内部逻辑是销毁先前的texture对象并创建一个新的texture对象（GlTexture2D wrap GpuTextureAdapter）
+        //但是framebuffer对象不会变化，iris依靠newDepthBufferVersion检测变化，最后的结果就是iris并不知道深度纹理变了
+        //于是它获取到的depthTexture.id就是-1（SR销毁老的纹理后自动设置的）
+        //最后创烂游戏渲染
+        //这个patch是补充了：
+        //framebuffer对象不会变化，但它的depthTexture会变的情况下的检测逻辑
+
+        //首次beginLevelRendering，lastDepthTexture为null，直接调用resizeIfNeeded并记录newDepthTextureId（实为GpuTexture obj）
+        if (lastDepthTexture == null){
+            instance.resizeIfNeeded(newDepthBufferVersion, newDepthTextureId, newWidth, newHeight, newDepthFormat, packDirectives);
+            lastDepthTexture = newDepthTextureId;
+            return true;
+        }
+        //后续beginLevelRendering，如果和当前的newDepthTextureId不一样了，说明SR重新创建了depthTexture
+        //我们就调用resizeIfNeeded并存一下这个新的的depthTexture，否则就是原版逻辑
+        if (!lastDepthTexture.equals(newDepthTextureId)){
+            instance.resizeIfNeeded(newDepthBufferVersion, newDepthTextureId, newWidth, newHeight, newDepthFormat, packDirectives);
+            lastDepthTexture = newDepthTextureId;
+            return true;
+        }
+        return instance.resizeIfNeeded(newDepthBufferVersion, newDepthTextureId, newWidth, newHeight, newDepthFormat, packDirectives);
+    }
+    #endif
 }

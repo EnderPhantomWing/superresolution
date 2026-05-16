@@ -34,7 +34,18 @@ private:
 
 public:
     NanoVGContext(int flags, GlFunctionTable glFuncTable) {
-        ctx = nvgCreateGL3(flags, glFuncTable);
+        ctx = nvgCreateGL3Ex(flags, glFuncTable, NVG_BACKEND_GL_LEGACY, nullptr, nullptr);
+        if (!ctx) {
+            throw std::runtime_error("Failed to create NanoVG context");
+        }
+    }
+
+    NanoVGContext(int flags,
+                  int backendMode,
+                  GlFunctionTable glFuncTable,
+                  const NVGRHICallbacks *rhiCallbacks,
+                  void *rhiUserPtr) {
+        ctx = nvgCreateGL3Ex(flags, glFuncTable, backendMode, rhiCallbacks, rhiUserPtr);
         if (!ctx) {
             throw std::runtime_error("Failed to create NanoVG context");
         }
@@ -175,6 +186,10 @@ public:
     void ResetFallbackFontsId(int baseFont);
 
     void ResetFallbackFonts(const std::string &baseFont);
+
+    void FontSetVariationAxis(int font, const char *axisTag, float value);
+
+    std::vector<std::string> FontGetVariationAxis(int font);
 
     void FontSize(float size);
 

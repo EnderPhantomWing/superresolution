@@ -29,7 +29,7 @@ import io.homo.superresolution.core.RenderSystems;
 import io.homo.superresolution.core.SuperResolutionConstants;
 import io.homo.superresolution.core.graphics.vulkan.VulkanCommandBuffer;
 import io.homo.superresolution.core.graphics.vulkan.VulkanDevice;
-import io.homo.superresolution.core.graphics.vulkan.utils.VkReflectionHelper;
+import io.homo.superresolution.core.graphics.vulkan.VkReflectionHelper;
 import io.homo.superresolution.srapi.*;
 import net.minecraft.network.chat.Component;
 import org.joml.Vector2f;
@@ -98,7 +98,7 @@ public class XeSS extends SRApiAlgorithm {
 
         if (context != null) {
             if (context.nativePtr > 0) {
-                SuperResolutionNativeAPI.srDestroyUpscaleContext(context);
+                context.destroy();
             }
         }
         SuperResolutionNativeAPI.srLoadUpscaleProvidersFromLibrary(
@@ -170,7 +170,7 @@ public class XeSS extends SRApiAlgorithm {
     @Override
     protected void destroySRApiContext() {
         if (context != null) {
-            SRReturnCode code = SuperResolutionNativeAPI.srDestroyUpscaleContext(context);
+            SRReturnCode code = context.destroy();
             if (code != SRReturnCode.OK) {
                 SuperResolution.LOGGER.error("Failed to destroy upscale context. Return code: {}", code);
                 throw new RuntimeException("Failed to destroy upscale context");
@@ -204,7 +204,7 @@ public class XeSS extends SRApiAlgorithm {
         desc.setCameraFar(inFlightFrameResourcesSet.frameData.cameraFar());
         desc.setCameraFovAngleVertical(inFlightFrameResourcesSet.frameData.verticalFov());
         desc.setViewSpaceToMetersFactor(1.0f);
-        desc.setReset(false);
+        desc.setReset(consumeHistoryReset());
         desc.setFlags(0);
         SRReturnCode code = SuperResolutionNativeAPI.srDispatchUpscale(context, desc);
         if (code != SRReturnCode.OK) {

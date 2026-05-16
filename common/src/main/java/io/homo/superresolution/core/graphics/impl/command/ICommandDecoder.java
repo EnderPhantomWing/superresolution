@@ -19,14 +19,23 @@
 package io.homo.superresolution.core.graphics.impl.command;
 
 import io.homo.superresolution.core.graphics.impl.buffer.IBuffer;
+import io.homo.superresolution.core.graphics.impl.buffer.IBufferData;
 import io.homo.superresolution.core.graphics.impl.device.IDevice;
 import io.homo.superresolution.core.graphics.impl.pipeline.ComputePipeline;
+import io.homo.superresolution.core.graphics.impl.pipeline.GraphicsPipeline;
 import io.homo.superresolution.core.graphics.impl.pipeline.RenderPass;
 import io.homo.superresolution.core.graphics.impl.texture.ITexture;
 import io.homo.superresolution.core.graphics.impl.vertex.IVertexBuffer;
-import io.homo.superresolution.core.graphics.impl.vertex.PrimitiveType;
+
+import java.nio.ByteBuffer;
 
 public interface ICommandDecoder {
+    ResourceStateTracker getStateTracker();
+
+    void declareExternalResource(ITexture texture, ResourceAccessType currentState);
+
+    void restoreExternalResource(ICommandBuffer commandBuffer, ITexture texture, ResourceAccessType targetState);
+
     void clearTextureRGBA(ICommandBuffer commandBuffer, ITexture texture, float[] color);
 
     void clearTextureDepth(ICommandBuffer commandBuffer, ITexture texture, float depth);
@@ -37,6 +46,26 @@ public interface ICommandDecoder {
 
     void copyBuffer(ICommandBuffer commandBuffer, IBuffer src, IBuffer dst, long srcOffset, long dstOffset, long size);
 
+    default void writeToBuffer(ICommandBuffer commandBuffer, IBuffer dst, long dstOffset, ByteBuffer data) {
+        writeToBuffer(commandBuffer, dst, dstOffset, data.remaining(), data);
+    }
+
+    void writeToBuffer(ICommandBuffer commandBuffer, IBuffer dst, long dstOffset, long size, ByteBuffer data);
+
+    default void writeToBuffer(ICommandBuffer commandBuffer, IBuffer dst, long dstOffset, IBufferData data) {
+        writeToBuffer(commandBuffer, dst, dstOffset, data.asByteBuffer());
+    }
+
+    default void writeToBuffer(ICommandBuffer commandBuffer, IBuffer dst, long dstOffset, long size, IBufferData data) {
+        writeToBuffer(commandBuffer, dst, dstOffset, size, data.asByteBuffer());
+    }
+
+    void writeToTexture(ICommandBuffer commandBuffer, ITexture texture, ByteBuffer data, int x, int y, int width, int height, int mipLevel);
+
+    default void writeToTexture(ICommandBuffer commandBuffer, ITexture texture, ByteBuffer data, int x, int y, int width, int height) {
+        writeToTexture(commandBuffer, texture, data, x, y, width, height, 0);
+    }
+
     void setViewport(ICommandBuffer commandBuffer, float x, float y, float width, float height);
 
     void setScissor(ICommandBuffer commandBuffer, int x, int y, int width, int height);
@@ -45,9 +74,19 @@ public interface ICommandDecoder {
 
     void setBlendConstants(ICommandBuffer commandBuffer, float r, float g, float b, float a);
 
-    void draw(ICommandBuffer commandBuffer, RenderPass renderPass, PrimitiveType primitiveType, IVertexBuffer vertexBuffer, int vertexCount, int firstVertex);
+    void beginRenderPass(ICommandBuffer commandBuffer, RenderPass renderPass);
 
-    void dispatch(ICommandBuffer commandBuffer, ComputePipeline computePipeline, int groupCountX, int groupCountY, int groupCountZ);
+    void endRenderPass(ICommandBuffer commandBuffer);
+
+    void bindPipeline(ICommandBuffer commandBuffer, GraphicsPipeline pipeline);
+
+    void bindPipeline(ICommandBuffer commandBuffer, ComputePipeline pipeline);
+
+    void draw(ICommandBuffer commandBuffer, IVertexBuffer vertexBuffer, int vertexCount, int firstVertex);
+
+    void dispatch(ICommandBuffer commandBuffer, int groupCountX, int groupCountY, int groupCountZ);
+
+    void memoryBarrier(ICommandBuffer commandBuffer, MemoryBarrierType... barriers);
 
     IDevice getDevice();
 }

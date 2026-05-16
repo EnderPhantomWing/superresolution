@@ -51,7 +51,25 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
 
     public MaterialSwitch setChecked(boolean checked) {
         if (checked != isChecked()) {
-            toggleChecked();
+            this.checked = checked;
+            if (handlePositionAnimator != null) {
+                handlePositionAnimator.cancel();
+                handlePositionAnimator.set(checked ? getBounds().width - 32 : 0f);
+            }
+            if (handleSizeAnimator != null) {
+                handleSizeAnimator.cancel();
+                handleSizeAnimator.set(checked
+                        ? ((style().showCheckedIconWhenEnable() || style().showCheckedIconAlways())
+                           ? MaterialSwitchSize.Default.handleSizeCheckedWithIcon()
+                           : MaterialSwitchSize.Default.handleSizeChecked())
+                        : ((style().showUncheckedIconWhenEnable() || style().showUncheckedIconAlways())
+                           ? MaterialSwitchSize.Default.handleSizeWithIcon()
+                           : MaterialSwitchSize.Default.handleSize()));
+            }
+            if (changeAnimator != null) {
+                changeAnimator.cancel();
+                changeAnimator.set(0f);
+            }
         }
         return this;
     }
@@ -74,9 +92,9 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
                             (style().showCheckedIconWhenEnable()
                                     || style().showCheckedIconAlways())
                                     ? MaterialSwitchSize.Default
-                                    .handleSizeCheckedWithIcon()
+                                      .handleSizeCheckedWithIcon()
                                     : MaterialSwitchSize.Default
-                                    .handleSizeChecked())
+                                      .handleSizeChecked())
                     .start();
         } else {
             // 关闭开关
@@ -92,9 +110,9 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
                             (style().showUncheckedIconWhenEnable()
                                     || style().showUncheckedIconAlways())
                                     ? MaterialSwitchSize.Default
-                                    .handleSizeWithIcon()
+                                      .handleSizeWithIcon()
                                     : MaterialSwitchSize.Default
-                                    .handleSize())
+                                      .handleSize())
                     .start();
         }
 
@@ -166,9 +184,9 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
                 (!isChecked() && (style().showUncheckedIconWhenEnable() && !isChecked()
                         || style().showUncheckedIconAlways()))
                 ? MaterialSwitchSize.Default
-                .handleSizeWithIcon()
+                  .handleSizeWithIcon()
                 : MaterialSwitchSize.Default
-                .handleSize())) {
+                  .handleSize())) {
             handleSizeAnimator.set(
                     ((isChecked() && (style().showCheckedIconWhenEnable() && isChecked()
                             || style().showCheckedIconAlways())) ||
@@ -176,9 +194,9 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
                                     && !isChecked()
                                     || style().showUncheckedIconAlways()))
                             ? MaterialSwitchSize.Default
-                            .handleSizeWithIcon()
+                              .handleSizeWithIcon()
                             : MaterialSwitchSize.Default
-                            .handleSize()));
+                              .handleSize()));
         }
         SwitchColors colors = getSwitchColors();
         ctx.beginGroup(style().zIndex());
@@ -233,7 +251,7 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
                     colors.iconColor.copy().alpha(
                             !handlePositionAnimator.isRunning() ? 255
                                     : Math.min((int) ((handlePositionAnimator
-                                            .progress() * 1.8) * 255),
+                                                       .progress() * 1.8) * 255),
                                     255)),
                     MaterialSwitchSize.Default.iconSize(),
                     new Vector2f(
@@ -246,7 +264,7 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
             float alpha = isDisabled() ? 1
                     : clamp(!handlePositionAnimator.isRunning() ? 255f
                             : Math.min(((handlePositionAnimator.progress() * 1.8f)
-                            * 255f), 255f) / 255f,
+                                        * 255f), 255f) / 255f,
                     0, 1);
             MaterialSymbols.iconClose().render(
                     ctx,
@@ -271,15 +289,15 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
         SwitchColors colors = new SwitchColors();
         colors.trackColor = isDisabled()
                 ? (isChecked() ? scheme().onSurface().copy().alpha((int) (255 * 0.1))
-                : scheme().surfaceVariant()).copy().alpha((int) (255 * 0.1))
+                   : scheme().surfaceVariant()).copy().alpha((int) (255 * 0.1))
                 : (isChecked() ? scheme().primary() : scheme().surfaceContainerHighest());
         colors.handleColor = isDisabled()
                 ? (isChecked() ? scheme().surface()
-                : scheme().onSurface().copy().alpha((int) (255 * 0.38)))
+                   : scheme().onSurface().copy().alpha((int) (255 * 0.38)))
                 : (isChecked() ? scheme().onPrimary() : scheme().outline());
         colors.iconColor = isDisabled()
                 ? (isChecked() ? scheme().surfaceContainerHighest().copy().alpha((int) (0 * 0.38))
-                : scheme().surfaceContainerHighest().copy().alpha((int) (255 * 0.38)))
+                   : scheme().surfaceContainerHighest().copy().alpha((int) (255 * 0.38)))
                 : (isChecked() ? scheme().primary() : scheme().surfaceContainerHighest());
         return colors;
     }
@@ -307,9 +325,9 @@ public class MaterialSwitch extends MaterialWidget<MaterialSwitch> {
                 .duration(150)
                 .to((style().showCheckedIconWhenEnable() && isChecked()) || style()
                         .showCheckedIconAlways() ? MaterialSwitchSize.Default
-                        .handleSizePressWithIcon()
+                                                   .handleSizePressWithIcon()
                         : MaterialSwitchSize.Default
-                        .handleSizePress())
+                          .handleSizePress())
                 .start();
         hoverAnimator
                 .timeInterpolator(new BezierInterpolator(0.2, 0, 0, 1))

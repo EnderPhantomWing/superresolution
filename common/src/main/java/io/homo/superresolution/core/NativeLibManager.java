@@ -37,16 +37,18 @@ import java.util.List;
 
 public class NativeLibManager {
     public static final String BASE_PATH = "lib";
-    public static final Logger LOGGER = LoggerFactory.getLogger("SuperResolution-NativeLib");
+    public static final Logger LOGGER = LoggerFactory.getLogger("SuperResolution/NativeLib");
 
+    #if USE_DEBUG_LIB == 1
     public static final boolean USE_DEBUG_LIB = true;
-
+    #else
+    public static final boolean USE_DEBUG_LIB = false;
+    #endif
     private static final List<NativeLib> libs = new ArrayList<>();
     public static NativeLib LIB_SUPER_RESOLUTION = null;
     public static NativeLib LIB_SUPER_RESOLUTION_FSR = null;
     public static NativeLib LIB_SUPER_RESOLUTION_XESS = null;
     public static NativeLib LIB_SUPER_RESOLUTION_DLSS = null;
-    public static NativeLib LIB_SUPER_RESOLUTION_FSRGL = null;
     private static boolean nativeApiAvailable;
 
     static {

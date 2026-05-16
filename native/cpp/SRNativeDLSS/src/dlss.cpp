@@ -5,6 +5,7 @@
 #include "sr/dlss/sr_provider.h"
 #include <string>
 #include <iostream>
+#include <memory>
 #ifdef ON_WIN64
 #include <windows.h>
 #endif
@@ -34,10 +35,9 @@ extern "C" {
         }
         ///////////////
         context->desc = *const_cast<SRCreateUpscaleContextDesc *>(desc);
-        SRDLSSPrivateData *privateData = new SRDLSSPrivateData();
+        auto privateData = std::make_unique<SRDLSSPrivateData>();
         SRVulkanDeviceInfo vulkanDevice = desc->renderDeviceInfo.vulkan;
         privateData->messageCallback = desc->messageCallback;
-        context->userContext = privateData;
         g_ngxLoggingCallback = desc->messageCallback;
 
         NVSDK_NGX_FeatureCommonInfo featureInfo = {};
@@ -49,37 +49,38 @@ extern "C" {
                 return;
 
             size_t len = std::strlen(message) + 1;
-            wchar_t *wideMessage = new wchar_t[len];
-            std::mbstowcs(wideMessage, message, len);
+            std::wstring wideMessage(len, L'\0');
+            std::mbstowcs(wideMessage.data(), message, len);
 
             SRMessageType msgType = SR_MESSAGE_TYPE_INFO;
-            if (loggingLevel <= NVSDK_NGX_LOGGING_LEVEL_ON) {
-                msgType = SR_MESSAGE_TYPE_ERROR;
-            }
+            //if (loggingLevel <= NVSDK_NGX_LOGGING_LEVEL_ON) {
+            //    msgType = SR_MESSAGE_TYPE_ERROR;
+            //}
 
             // NGX传进来的日志末尾有换行符，很不美观（划掉）
-            size_t msgLen = std::wcslen(wideMessage);
+            size_t msgLen = std::wcslen(wideMessage.c_str());
             if (msgLen > 0 && wideMessage[msgLen - 1] == L'\n') {
                 wideMessage[msgLen - 1] = L'\0';
             }
 
-            g_ngxLoggingCallback(msgType, wideMessage);
-            delete[] wideMessage;
+            g_ngxLoggingCallback(msgType, wideMessage.c_str());
         };
 
         featureInfo.LoggingInfo.LoggingCallback =
                 desc->messageCallback ? ngxLogger : (NVSDK_NGX_AppLogCallback) nullptr;
         featureInfo.LoggingInfo.MinimumLoggingLevel = NVSDK_NGX_LOGGING_LEVEL_ON;
+
+        std::wstring featureDllPath;
+        const wchar_t *pathArray[1] = {};
+        NVSDK_NGX_PathListInfo pathListInfo = {};
         if (srFindParam(&desc->extraParams, "NGX_FEATURE_DLL_PATH") != nullptr) {
             const SRContextExtraParam *param = srFindParam(&desc->extraParams, "NGX_FEATURE_DLL_PATH");
             if (param && param->valueType == SR_PARAM_VALUE_TYPE_STRING && param->value.stringValue) {
                 size_t len = std::strlen(param->value.stringValue) + 1;
-                wchar_t *widePath = new wchar_t[len];
-                std::mbstowcs(widePath, param->value.stringValue, len);
-
-                wchar_t const *const paths[] = {widePath};
-                NVSDK_NGX_PathListInfo pathListInfo = {};
-                pathListInfo.Path = paths;
+                featureDllPath.resize(len);
+                std::mbstowcs(featureDllPath.data(), param->value.stringValue, len);
+                pathArray[0] = featureDllPath.c_str();
+                pathListInfo.Path = pathArray;
                 pathListInfo.Length = 1;
                 featureInfo.PathListInfo = pathListInfo;
             }
@@ -101,14 +102,15 @@ extern "C" {
                 (VkInstance) (vulkanDevice.instance),
                 (VkPhysicalDevice) (vulkanDevice.physicalDevice),
                 (VkDevice) (vulkanDevice.device),
-                (PFN_vkGetInstanceProcAddr) (vulkanDevice.instanceProcAddr),
-                (PFN_vkGetDeviceProcAddr) (vulkanDevice.deviceProcAddr),
+                reinterpret_cast<PFN_vkGetInstanceProcAddr>(vulkanDevice.instanceProcAddr),
+                reinterpret_cast<PFN_vkGetDeviceProcAddr>(vulkanDevice.deviceProcAddr),
                 &featureInfo,
                 NVSDK_NGX_Version_API);
             if (!NVSDK_NGX_SUCCEED(result)) {
                 std::wstring msg = L"NVSDK_NGX_VULKAN_Init failed. Code:";
                 msg += GetNGXResultAsString(result);
                 privateData->messageCallback(SR_MESSAGE_TYPE_ERROR, msg.c_str());
+                g_ngxInitialized = false;
                 return (SRReturnCode) SR_RETURN_CODE_UNEXPECTED_ERROR;
             }
         }
@@ -164,6 +166,7 @@ extern "C" {
             privateData->messageCallback(SR_MESSAGE_TYPE_ERROR, msg.c_str());
             return (SRReturnCode) SR_RETURN_CODE_UNEXPECTED_ERROR;
         }
+        context->userContext = privateData.release();
         ///////////////
         return (SRReturnCode) SR_RETURN_CODE_OK;
     }
@@ -218,7 +221,7 @@ extern "C" {
                     static_cast<NVSDK_NGX_DLSS_Hint_Render_Preset>(param->value.int32Value));
                 privateData->ngxParams->Set(
                     NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraQuality,
-                    static_cast<NVSDK_NGX_DLSS_Hint_Render_Preset>(param->value.int32Value));
+                    param->value.int32Value);
             }
         }
         auto result = NGX_VULKAN_CREATE_DLSS_EXT1(

@@ -29,6 +29,7 @@ import io.homo.superresolution.common.config.SuperResolutionConfig;
 import io.homo.superresolution.common.debug.imgui.ImGuiLayer;
 import io.homo.superresolution.common.minecraft.CallType;
 import io.homo.superresolution.common.minecraft.MinecraftRenderTargetWrapper;
+import io.homo.superresolution.common.minecraft.MinecraftUtils;
 import io.homo.superresolution.common.minecraft.MinecraftWindow;
 import io.homo.superresolution.common.minecraft.handler.shadercompat.ShaderCompatHandler;
 import io.homo.superresolution.common.mixin.core.accessor.MinecraftAccessor;
@@ -54,6 +55,7 @@ public class RenderHandlerManager {
     public static int frameCount = 0;
     private static IBindableFrameBuffer originRenderTarget;
 
+    private static boolean needResize;
     public static void initialize() {
         RenderSystem.assertOnRenderThread();
         minecraft = Minecraft.getInstance();
@@ -84,7 +86,7 @@ public class RenderHandlerManager {
         return false;
     }
 
-    private static void updateHandler() {
+    public static void updateHandler() {
         if (needUpdateHandler()) {
             if (handler != null) {
                 handler.destroy();
@@ -95,13 +97,21 @@ public class RenderHandlerManager {
             } else {
                 handler = new MinecraftRenderHandler();
             }
-            minecraft.resizeDisplay();
             handler.initialize();
+            needResize = true;
         }
     }
 
     public static void onFrameBegin() {
         frameCount++;
+        if (needResize) {
+            MinecraftUtils.resize();
+            SuperResolution.getCurrentAlgorithm().resize(
+                    RenderHandlerManager.getScreenWidth(),
+                    RenderHandlerManager.getScreenHeight()
+            );
+            needResize = false;
+        }
     }
 
     public static void onFrameEnd() {
@@ -231,20 +241,23 @@ public class RenderHandlerManager {
         return SuperResolutionConfig.isEnableUpscale() ? SuperResolutionConfig.getRenderScaleFactor() : 1;
     }
 
+    // 某些算法的最小输入尺寸为32x32（比如DLSS），但Minecraft几乎不会小于这个尺寸
+    // 当然，除了Windows上最小化窗口时😅，所以这里直接写死32
+    // fuck Windows & Microsoft
     public static int getRenderHeight() {
-        return (int) Math.max(getScreenHeight() * getScaleFactor(), 1);
+        return (int) Math.max(getScreenHeight() * getScaleFactor(), 32);
     }
 
     public static int getRenderWidth() {
-        return (int) Math.max(getScreenWidth() * getScaleFactor(), 1);
+        return (int) Math.max(getScreenWidth() * getScaleFactor(), 32);
     }
 
     public static int getScreenHeight() {
-        return Math.max(MinecraftWindow.getWindowHeight(), 1);
+        return Math.max(MinecraftWindow.getWindowHeight(), 32);
     }
 
     public static int getScreenWidth() {
-        return Math.max(MinecraftWindow.getWindowWidth(), 1);
+        return Math.max(MinecraftWindow.getWindowWidth(), 32);
     }
 
     public static Vector2i getScreenSize() {

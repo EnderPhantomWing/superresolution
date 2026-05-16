@@ -42,6 +42,7 @@ import java.util.List;
 public class GlBlitRenderer {
     private static IVertexBuffer fullscreenQuad;
     private static RenderPass renderPass;
+    private static GlGraphicsPipeline graphicsPipeline;
     private static IBindableFrameBuffer cachedFrameBuffer = new IBindableFrameBuffer() {
         @Override
         public void bind(FrameBufferBindPoint bindPoint, boolean setViewport) {
@@ -81,11 +82,6 @@ public class GlBlitRenderer {
         @Override
         public DepthStencilAttachment getDepthStencilAttachment() {
             return null;
-        }
-
-        @Override
-        public void resizeFrameBuffer(int width, int height) {
-
         }
 
         @Override
@@ -136,18 +132,19 @@ public class GlBlitRenderer {
             );
             program.compile();
 
-            GlGraphicsPipeline graphicsPipeline = (GlGraphicsPipeline) GlGraphicsPipeline.builder()
+            renderPass = RenderPass.builder()
+                    .frameBuffer(cachedFrameBuffer)
+                    .build(RenderSystems.opengl().device());
+
+            graphicsPipeline = (GlGraphicsPipeline) GlGraphicsPipeline.builder()
                     .shader(program)
+                    .renderPass(renderPass)
+                    .primitiveType(PrimitiveType.TriangleStrip)
                     .rasterization(r -> r.cullMode(CullMode.None))
                     .depthStencil(r -> r.depthTestEnable(false).depthWriteEnable(false).stencilTestEnable(false))
                     .dynamicStates(DynamicStateFlags.Viewport)
                     .colorBlend(r -> r.addAttachment(ColorBlendAttachment.noBlend()))
                     .vertexFormat(FullscreenQuad.getVertexFormat())
-                    .build(RenderSystems.opengl().device());
-
-            renderPass = RenderPass.builder()
-                    .pipeline(graphicsPipeline)
-                    .frameBuffer(cachedFrameBuffer)
                     .build(RenderSystems.opengl().device());
         }
         return renderPass;
@@ -159,19 +156,14 @@ public class GlBlitRenderer {
         }
 
         GlRenderPass pass = (GlRenderPass) getOrCreateRenderPass();
-        pass.pipeline().descriptorSet().samplerTexture("uTexture", textureId);
-        pass.pipeline().descriptorSet().update();
+        graphicsPipeline.descriptorSet().samplerTexture("uTexture", textureId);
+        graphicsPipeline.descriptorSet().update();
         ICommandBuffer commandBuffer = RenderSystems.opengl().device().defaultCommandPool().createCommandBuffer();
         commandBuffer.begin();
-        RenderSystems.opengl().device().commandDecoder()
-                .draw(
-                        commandBuffer,
-                        pass,
-                        PrimitiveType.TriangleStrip,
-                        fullscreenQuad,
-                        4,
-                        0
-                );
+        commandBuffer.beginRenderPass(pass);
+        commandBuffer.bindPipeline(graphicsPipeline);
+        commandBuffer.draw(fullscreenQuad, 4, 0);
+        commandBuffer.endRenderPass();
         commandBuffer.end();
         RenderSystems.opengl().device().submitCommandBuffer(commandBuffer);
     }
