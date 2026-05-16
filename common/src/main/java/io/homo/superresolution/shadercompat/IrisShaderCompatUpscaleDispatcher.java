@@ -19,6 +19,7 @@
 package io.homo.superresolution.shadercompat;
 
 
+import io.homo.irisapi.ICompositeRendererAccessor;
 import io.homo.irisapi.IrisAPI;
 import io.homo.irisapi.NamedCompositePass;
 import io.homo.superresolution.api.InputResourceSet;
@@ -27,13 +28,14 @@ import io.homo.superresolution.api.event.AlgorithmDispatchEvent;
 import io.homo.superresolution.api.event.AlgorithmDispatchFinishEvent;
 import io.homo.superresolution.common.SuperResolution;
 import io.homo.superresolution.common.config.SuperResolutionConfig;
+import io.homo.superresolution.common.minecraft.MinecraftUtils;
 import io.homo.superresolution.common.minecraft.handler.RenderHandlerManager;
 import io.homo.superresolution.common.minecraft.handler.shadercompat.SRShaderCompatData;
 import io.homo.superresolution.common.minecraft.handler.shadercompat.ShaderCompatTextureInfo;
 import io.homo.superresolution.common.perf.PerformanceTracker;
 import io.homo.superresolution.common.upscale.AlgorithmManager;
+import io.homo.superresolution.common.upscale.AlgorithmManager;
 import io.homo.superresolution.common.upscale.DispatchResource;
-import io.homo.superresolution.common.upscale.MotionVectorsGenerator;
 import io.homo.superresolution.core.graphics.impl.CopyOperation;
 import io.homo.superresolution.core.graphics.impl.framebuffer.FrameBufferAttachmentType;
 import io.homo.superresolution.core.graphics.impl.framebuffer.IFrameBuffer;
@@ -70,7 +72,7 @@ public class IrisShaderCompatUpscaleDispatcher {
     private static SRShaderCompatData.InputTexture lastExposureConfig;
 
 
-    private static CompositeRenderer cachedCompositeRenderer;
+    private static ICompositeRendererAccessor cachedCompositeRenderer;
     private static NamedCompositePass cachedNamedCompositePass;
 
     private static float resolvePreExposure(SRShaderCompatData.SourceConfig config) {
@@ -123,7 +125,7 @@ public class IrisShaderCompatUpscaleDispatcher {
         }
     }
 
-    public static DispatchResource getDispatchResource(CompositeRenderer compositeRenderer,
+    public static DispatchResource getDispatchResource(ICompositeRendererAccessor compositeRenderer,
                                                        float preExposure,
                                                        ITexture resolvedExposureTexture) {
         return new DispatchResource(
@@ -139,8 +141,8 @@ public class IrisShaderCompatUpscaleDispatcher {
                 PerformanceTracker.getLastResultCPU("Frame"),
                 (float) param.verticalFov,
                 (float) Math.tan(param.verticalFov / 2.0) * RenderHandlerManager.getRenderWidth() / RenderHandlerManager.getRenderHeight(),
-                0.05F,
-                Minecraft.getInstance().gameRenderer.getDepthFar(),
+                MinecraftUtils.getCameraNear(),
+                MinecraftUtils.getCameraFar(),
                 getJitterOffset(),
                 getJitterSequenceLength(),
                 param.currentModelViewMatrix,
@@ -224,7 +226,7 @@ public class IrisShaderCompatUpscaleDispatcher {
         RenderHandlerManager.frameCount = 0;
     }
 
-    public static void dispatchUpscale(CompositeRenderer compositeRenderer, NamedCompositePass pass) {
+    public static void dispatchUpscale(ICompositeRendererAccessor compositeRenderer, NamedCompositePass pass) {
         if (!SuperResolutionConfig.isEnableUpscaleOriginal()) {
             return;
         }
@@ -237,7 +239,7 @@ public class IrisShaderCompatUpscaleDispatcher {
         SRShaderCompatData.UpscaleConfig currentConfig = IrisShaderCompatUtils.getCurrentConfig().get().upscale;
         boolean needUpdate = false;
 
-        if (!compositeRenderer.equals(cachedCompositeRenderer)) {
+        if (!compositeRenderer.isSameInstance(cachedCompositeRenderer)) {
             cachedCompositeRenderer = compositeRenderer;
             needUpdate = true;
         }
@@ -327,12 +329,7 @@ public class IrisShaderCompatUpscaleDispatcher {
         }
         GlDebug.pushGroup(64108436, "SR Upscale");
         AlgorithmManager.update();
-        if (SuperResolutionConfig.isGenerateMotionVectors()) {
-            MotionVectorsGenerator.update(
-                    colorTexture.getInternalTexture(),
-                    depthTexture.getInternalTexture()
-            );
-        }
+        // MotionVectorsGenerator 已被弃用
         DispatchResource dispatchResource = getDispatchResource(
                 compositeRenderer,
                 preExposure,

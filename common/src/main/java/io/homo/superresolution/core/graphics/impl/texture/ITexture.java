@@ -20,9 +20,8 @@ package io.homo.superresolution.core.graphics.impl.texture;
 
 import io.homo.superresolution.core.graphics.impl.GpuObject;
 import io.homo.superresolution.core.impl.Destroyable;
-import io.homo.superresolution.core.impl.Resizable;
 
-public interface ITexture extends Destroyable, Resizable, GpuObject {
+public interface ITexture extends Destroyable, GpuObject {
     TextureFormat getTextureFormat();
 
     TextureUsages getTextureUsages();
@@ -44,10 +43,10 @@ public interface ITexture extends Destroyable, Resizable, GpuObject {
 
     default String string() {
         return getTextureDescription().getLabel() != null ? getTextureDescription().getLabel() : "ITexture{" +
-                "id=" + handle() +
-                "format=" + getTextureFormat() +
-                "width=" + getWidth() +
-                "height=" + getHeight() +
-                '}';
+                                                                                                 "id=" + handle() +
+                                                                                                 "format=" + getTextureFormat() +
+                                                                                                 "width=" + getWidth() +
+                                                                                                 "height=" + getHeight() +
+                                                                                                 '}';
     }
 }

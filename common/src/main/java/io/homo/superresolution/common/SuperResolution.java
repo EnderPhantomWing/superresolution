@@ -19,8 +19,6 @@
 package io.homo.superresolution.common;
 
 import com.google.common.collect.ImmutableList;
-import dev.architectury.event.events.client.ClientLifecycleEvent;
-import dev.architectury.event.events.client.ClientTickEvent;
 import io.homo.superresolution.api.AbstractAlgorithm;
 import io.homo.superresolution.api.InitializationDescription;
 import io.homo.superresolution.api.SuperResolutionAPI;
@@ -45,7 +43,6 @@ import io.homo.superresolution.core.graphics.glslang.GlslangShaderCompiler;
 import io.homo.superresolution.core.graphics.opengl.GlState;
 import io.homo.superresolution.core.gui.MaterialUI;
 import io.homo.superresolution.core.impl.Destroyable;
-import io.homo.superresolution.core.impl.Resizable;
 import io.homo.superresolution.core.utils.MessageBox;
 import io.homo.superresolution.srapi.SuperResolutionNativeAPI;
 import net.minecraft.client.Minecraft;
@@ -56,10 +53,9 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class SuperResolution implements Resizable, Destroyable {
+public final class SuperResolution implements Destroyable {
     public static final String MOD_ID = "super_resolution";
     public static final Logger LOGGER = LoggerFactory.getLogger("SuperResolution");
-    public static final Logger LOGGER_CPP = LoggerFactory.getLogger("SuperResolution-CPP");
     public static final List<String> INCOMPATIBLE_MODS = ImmutableList.<String>builder()
             .add("resolutioncontrol-plus-plus")
             .add("resolutioncontrol-plus")
@@ -72,6 +68,7 @@ public final class SuperResolution implements Resizable, Destroyable {
     public static None defaultAlgorithm = new None();
     public static boolean isInit;
     public static boolean isPreInit;
+    public static boolean isRenderingInitialized = false;
     public static boolean gameIsLoaded = false;
     public static boolean gameIsStarted = false;
     public static AlgorithmDescription<?> algorithmDescription;
@@ -80,6 +77,12 @@ public final class SuperResolution implements Resizable, Destroyable {
     public static int cachedWidth;
     public static int cachedHeight;
     public static Thread renderThread;
+
+    // 窗口拖拽时每帧触发 resize；算法重建昂贵，去抖到尺寸稳定后执行一次。
+    private static final long RESIZE_DEBOUNCE_MS = 120L;
+    private static volatile boolean pendingResize = false;
+    private static volatile long pendingResizeDeadlineMs = 0L;
+
     private static Minecraft minecraft = Minecraft.getInstance();
     private static SuperResolution instance;
 
@@ -91,57 +94,51 @@ public final class SuperResolution implements Resizable, Destroyable {
         }
     }
 
-    public static void onGameLoadFinished(){
+    public static void onGameLoadFinished() {
         SuperResolution.createAlgorithm();
+    }
 
-        //TODO: 这是个临时的补丁，我实在修不好第一次进世界时超分质量差的问题（）
-        ShaderCompatHandler.irisApiReloadShader();
+    public static void onClientStarted() {
+        if (gameIsStarted) {
+            SuperResolution.LOGGER.warn("似乎有什么东西在重复初始化SR");
+            return;
+        }
+        SuperResolutionConfig.SPEC.load();
+        gameIsStarted = true;
+        SuperResolutionKeyMapping.registerKeyMapping();
+        instance = new SuperResolution();
+        SuperResolution.check();
+        SuperResolution.preInit();
+        SuperResolution.initRendering();
+        SuperResolution.getInstance().init();
+        MaterialUI.init();
+    }
+
+    public static void onClientStopping() {
+        SuperResolution.getInstance().destroy();
+    }
+
+    public static void onClientSetup() {
+        SuperResolutionKeyMapping.registerKeyMapping();
+        if (Platform.currentPlatform.isInstallIris()) {
+            try {
+                Class.forName("io.homo.superresolution.shadercompat.IrisShaderCompatEventHandler").getMethod("registerEventListeners").invoke(null);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+
+            }
+        }
+    }
+
+    public static void onClientTickEnd() {
+        while (SuperResolutionKeyMapping.OPENGUI_KEYMAPPING.consumeClick()) {
+            minecraft.setScreen(
+                    ConfigScreenBuilder.create().buildConfigScreen(minecraft.screen)
+            );
+        }
     }
 
     public static void registerEvents() {
-        ClientLifecycleEvent.CLIENT_SETUP.register(
-                (minecraft) -> {
-                    SuperResolutionKeyMapping.registerKeyMapping();
-                    if (Platform.currentPlatform.isInstallIris()) {
-                        try {
-                            Class.forName("io.homo.superresolution.shadercompat.IrisShaderCompatEventHandler").getMethod("registerEventListeners").invoke(null);
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                }
-        );
-        ClientLifecycleEvent.CLIENT_STARTED.register(
-                (minecraft) -> {
-                    if (gameIsStarted) {
-                        SuperResolution.LOGGER.warn("似乎有什么东西在重复初始化SR");
-                        return;
-                    }
-                    SuperResolutionConfig.SPEC.load();
-                    gameIsStarted = true;
-                    SuperResolutionKeyMapping.registerKeyMapping();
-                    instance = new SuperResolution();
-                    SuperResolution.check();
-                    SuperResolution.preInit();
-                    SuperResolution.initRendering();
-                    SuperResolution.getInstance().init();
-                    MaterialUI.init();
-
-
-                }
-        );
-        ClientLifecycleEvent.CLIENT_STOPPING.register(
-                (minecraft) -> {
-                    SuperResolution.getInstance().destroy();
-                }
-        );
-        ClientTickEvent.CLIENT_POST.register(minecraft -> {
-            while (SuperResolutionKeyMapping.OPENGUI_KEYMAPPING.consumeClick()) {
-                minecraft.setScreen(
-                        ConfigScreenBuilder.create().buildConfigScreen(minecraft.screen)
-                );
-            }
-        });
     }
 
     public static void preInit() {
@@ -224,6 +221,7 @@ public final class SuperResolution implements Resizable, Destroyable {
 
             RenderHandlerManager.initialize();
             AlgorithmManager.init();
+            isRenderingInitialized = true;
             algorithmDescription = SuperResolutionConfig.getUpscaleAlgorithm();
         }
     }
@@ -250,6 +248,10 @@ public final class SuperResolution implements Resizable, Destroyable {
             } catch (Exception e) {
                 SuperResolution.LOGGER.info("初始化算法 {} 时失败 错误:", algorithmDescription.getDisplayName());
                 e.printStackTrace();
+                if (currentAlgorithm != null) {
+                    try { currentAlgorithm.destroy(); } catch (Exception ignored2) { }
+                }
+                currentAlgorithm = null;
             }
         }
 
@@ -279,6 +281,10 @@ public final class SuperResolution implements Resizable, Destroyable {
                 return true;
             } catch (Exception e) {
                 LOGGER.error("初始化算法 {} 时失败：", algorithmDescription.getDisplayName(), e);
+                if (currentAlgorithm != null) {
+                    try { currentAlgorithm.destroy(); } catch (Exception ignored2) { }
+                }
+                currentAlgorithm = null;
             }
         }
         return false;
@@ -324,8 +330,42 @@ public final class SuperResolution implements Resizable, Destroyable {
     }
 
     public void resize(int width, int height) {
-        cachedWidth = MinecraftWindow.getWindowWidth();
-        cachedHeight = MinecraftWindow.getWindowHeight();
+        if (width == cachedWidth && height == cachedHeight && !pendingResize) {
+            return;
+        }
+        // 立刻更新 cached 让上游比较立即等价，实际重建交给 tickResize 去抖后执行。
+        cachedWidth = width;
+        cachedHeight = height;
+        pendingResize = true;
+        pendingResizeDeadlineMs = System.currentTimeMillis() + RESIZE_DEBOUNCE_MS;
+    }
+
+    public void forceResize(int width, int height) {
+        cachedWidth = width;
+        cachedHeight = height;
+        pendingResize = false;
+        SuperResolution self = getInstance();
+        if (self != null) {
+            self.applyPendingResize();
+        }
+    }
+
+    /** 每帧调用；尺寸稳定 RESIZE_DEBOUNCE_MS 后才真正重建算法。 */
+    public static void tickResize() {
+        if (!pendingResize) return;
+        if (System.currentTimeMillis() < pendingResizeDeadlineMs) return;
+        pendingResize = false;
+        SuperResolution self = getInstance();
+        if (self != null) {
+            self.applyPendingResize();
+        }
+    }
+
+    private void applyPendingResize() {
+        int w = MinecraftWindow.getWindowWidth();
+        int h = MinecraftWindow.getWindowHeight();
+        w = Math.max(32,w) ;
+        h = Math.max(32,h);
         if (currentAlgorithm != null && SuperResolutionConfig.isEnableUpscaleOriginal()) {
             SuperResolutionAPI.EVENT_BUS.post(
                     new AlgorithmResizeEvent(
@@ -336,13 +376,20 @@ public final class SuperResolution implements Resizable, Destroyable {
                             RenderHandlerManager.getRenderHeight()
                     )
             );
-            currentAlgorithm.resize(MinecraftWindow.getWindowWidth(), MinecraftWindow.getWindowHeight());
+            currentAlgorithm.resize(
+                    w,
+                    h
+            );
+            // 分辨率变了，时序历史无效。
+            currentAlgorithm.invalidateHistory();
         }
-        AlgorithmManager.resize(MinecraftWindow.getWindowWidth(), MinecraftWindow.getWindowHeight());
+        AlgorithmManager.resize(w, h);
     }
 
     public void destroy() {
         isInit = false;
+        isRenderingInitialized = false;
+        pendingResize = false;
         if (currentAlgorithm != null) {
             currentAlgorithm.destroy();
         }

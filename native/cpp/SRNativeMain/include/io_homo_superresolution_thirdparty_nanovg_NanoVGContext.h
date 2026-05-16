@@ -19,6 +19,14 @@ JNIEXPORT jlong JNICALL Java_io_homo_superresolution_thirdparty_nanovg_NanoVGCon
 
 /*
  * Class:     io_homo_superresolution_thirdparty_nanovg_NanoVGContext
+ * Method:    nCreateContextEx
+ * Signature: (II)J
+ */
+JNIEXPORT jlong JNICALL Java_io_homo_superresolution_thirdparty_nanovg_NanoVGContext_nCreateContextEx
+  (JNIEnv *, jclass, jint, jint);
+
+/*
+ * Class:     io_homo_superresolution_thirdparty_nanovg_NanoVGContext
  * Method:    nDeleteContext
  * Signature: (J)V
  */
@@ -591,6 +599,22 @@ JNIEXPORT void JNICALL Java_io_homo_superresolution_thirdparty_nanovg_NanoVGCont
  * Signature: (JI)V
  */
 JNIEXPORT void JNICALL Java_io_homo_superresolution_thirdparty_nanovg_NanoVGContext_nFontFaceId
+  (JNIEnv *, jclass, jlong, jint);
+
+/*
+ * Class:     io_homo_superresolution_thirdparty_nanovg_NanoVGContext
+ * Method:    nFontSetVariationAxis
+ * Signature: (JILjava/lang/String;F)V
+ */
+JNIEXPORT void JNICALL Java_io_homo_superresolution_thirdparty_nanovg_NanoVGContext_nFontSetVariationAxis
+  (JNIEnv *, jclass, jlong, jint, jstring, jfloat);
+
+/*
+ * Class:     io_homo_superresolution_thirdparty_nanovg_NanoVGContext
+ * Method:    nFontGetVariationAxis
+ * Signature: (JI)[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_io_homo_superresolution_thirdparty_nanovg_NanoVGContext_nFontGetVariationAxis
   (JNIEnv *, jclass, jlong, jint);
 
 /*

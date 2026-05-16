@@ -27,7 +27,6 @@ import io.homo.superresolution.core.gui.core.animator.TimeInterpolator;
 import io.homo.superresolution.core.gui.core.backends.interfaces.IPaint;
 import io.homo.superresolution.core.gui.core.backends.interfaces.TextAlign;
 import io.homo.superresolution.core.gui.core.backends.interfaces.TextAlignType;
-import io.homo.superresolution.core.gui.core.backends.nanovg.NanoVG;
 import io.homo.superresolution.core.gui.core.backends.render.RenderContext;
 import io.homo.superresolution.core.gui.core.event.events.WidgetEvent;
 import io.homo.superresolution.core.gui.core.impl.Rectangle;
@@ -338,11 +337,6 @@ public class MaterialButton extends MaterialWidget<MaterialButton> {
     }
 
     private void updateRectangle() {
-        NanoVG.context.save();
-        NanoVG.context.fontSize(size().fontSize());
-        float textContextWidth = NanoVG.RENDERER.TEXT.measureTextWidth(textContextSupplier.get(), size().fontSize(), size().fontSize() + 1);
-        NanoVG.context.restore();
-
         float iconContextWidth = 0;
         if (iconContextSupplier.get() != null) {
             iconContextWidth = style().size().iconSize();
@@ -350,14 +344,13 @@ public class MaterialButton extends MaterialWidget<MaterialButton> {
         float width = style().size().padding() +
                 iconContextWidth +
                 (iconContextWidth == 0 ? 0 : style().size().iconPadding()) +
-                textContextWidth +
                 style().size().padding();
         setElementSize(width, style().size().height());
     }
 
     private float getCornerSize() {
         return pressAnimator == null ? (style().shape() == MaterialButtonShape.Round ? getBounds().height / 2
-                : style().size().squareCornerSize()) : pressAnimator.get();
+                                        : style().size().squareCornerSize()) : pressAnimator.get();
     }
 
     private ButtonColors getButtonColors() {

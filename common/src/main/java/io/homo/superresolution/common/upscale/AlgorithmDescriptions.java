@@ -26,6 +26,7 @@ import io.homo.superresolution.api.registry.AlgorithmRegistry;
 import io.homo.superresolution.api.registry.ExtraResource;
 import io.homo.superresolution.api.registry.ExtraResources;
 import io.homo.superresolution.api.utils.Requirement;
+import io.homo.superresolution.common.upscale.anime4k.Anime4K;
 import io.homo.superresolution.common.upscale.dlss.DLSS;
 import io.homo.superresolution.common.upscale.ffxfsr.FfxFSR;
 import io.homo.superresolution.common.upscale.fsr1.FSR1;
@@ -51,7 +52,7 @@ public class AlgorithmDescriptions {
     public static final AlgorithmDescription<FSR1> FSR1 =
             new AlgorithmDescription<>(
                     FSR1.class,
-                    "FSR1",
+                    "AMD FSR 1",
                     "fsr1",
                     "AMD FidelityFX Super Resolution 1",
                     Requirement.nothing()
@@ -63,7 +64,7 @@ public class AlgorithmDescriptions {
     public static final AlgorithmDescription<FSR2> FSR2 =
             new AlgorithmDescription<>(
                     FSR2.class,
-                    "FSR2",
+                    "AMD FSR 2 (OpenGL)",
                     "fsr2",
                     "AMD FidelityFX Super Resolution 2 (OpenGL)",
                     Requirement.nothing()
@@ -76,7 +77,7 @@ public class AlgorithmDescriptions {
     public static final AlgorithmDescription<FfxFSR> FSR =
             new AlgorithmDescription<>(
                     FfxFSR.class,
-                    "FSR",
+                    "AMD FSR",
                     "fsr",
                     "AMD FidelityFX Super Resolution",
                     Requirement.nothing()
@@ -90,7 +91,7 @@ public class AlgorithmDescriptions {
     public static final AlgorithmDescription<XeSS> XESS =
             new AlgorithmDescription<>(
                     XeSS.class,
-                    "XeSS",
+                    "Intel XeSS",
                     "xess",
                     "Intel Xe Super Sampling",
                     Requirement.nothing()
@@ -113,7 +114,7 @@ public class AlgorithmDescriptions {
     public static final AlgorithmDescription<DLSS> DLSS =
             new AlgorithmDescription<>(
                     DLSS.class,
-                    "DLSS",
+                    "NVIDIA DLSS",
                     "dlss",
                     "NVIDIA DLSS",
                     Requirement.nothing()
@@ -157,6 +158,18 @@ public class AlgorithmDescriptions {
                             .isFalse(Gl::isLegacy)
                             .isTrue(Gl::isSupportDSA)
             );
+    public static final AlgorithmDescription<Anime4K> ANIME4K =
+            new AlgorithmDescription<>(
+                    Anime4K.class,
+                    "Anime4K",
+                    "anime4k",
+                    "Anime4K",
+                    Requirement.nothing()
+                            .glMajorVersion(4)
+                            .glMinorVersion(3)
+                            .isFalse(Gl::isLegacy)
+                            .isTrue(Gl::isSupportDSA)
+            );
 
     public static void registryAlgorithms() {
         AlgorithmRegistry.registry(NONE);
@@ -167,6 +180,9 @@ public class AlgorithmDescriptions {
         AlgorithmRegistry.registry(DLSS);
         AlgorithmRegistry.registry(SGSR1);
         AlgorithmRegistry.registry(SGSR2);
+        if (Platform.currentPlatform.isDevelopmentEnvironment()) {
+            AlgorithmRegistry.registry(ANIME4K);
+        }
         SuperResolutionAPI.EVENT_BUS.post(new AlgorithmRegisterEvent());
     }
 }

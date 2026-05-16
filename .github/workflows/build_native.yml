@@ -66,7 +66,6 @@ jobs:
         run: python init.py
 
       - name: Build native libraries (Linux)
-        if: ${{ !cancelled() }}
         id: build
         run: ./gradlew buildNative
         continue-on-error: true
@@ -76,7 +75,7 @@ jobs:
         with:
           name: native-libs-linux
           path: |
-            common/src/main/resources/lib/**/*.so
+            common/src/main/resources/lib/**/*
           if-no-files-found: error
 
   build-windows:
@@ -131,7 +130,6 @@ jobs:
         run: python init.py
 
       - name: Build native libraries (Windows)
-        if: ${{ !cancelled()}}
         id: build
         run: .\gradlew.bat buildNative
         continue-on-error: true
@@ -141,7 +139,7 @@ jobs:
         with:
           name: native-libs-windows
           path: |
-            common/src/main/resources/lib/**/*.dll
+            common/src/main/resources/lib/**/*
           if-no-files-found: error
 
   upload-artifacts:

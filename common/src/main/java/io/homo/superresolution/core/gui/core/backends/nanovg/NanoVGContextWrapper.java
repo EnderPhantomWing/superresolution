@@ -20,7 +20,9 @@ package io.homo.superresolution.core.gui.core.backends.nanovg;
 
 import io.homo.superresolution.common.minecraft.MinecraftWindow;
 import io.homo.superresolution.common.minecraft.handler.RenderHandlerManager;
+import io.homo.superresolution.core.RenderSystems;
 import io.homo.superresolution.core.graphics.impl.framebuffer.FrameBufferBindPoint;
+import io.homo.superresolution.core.graphics.impl.framebuffer.FramebufferDescription;
 import io.homo.superresolution.core.graphics.impl.texture.TextureFormat;
 import io.homo.superresolution.core.graphics.opengl.GlStates;
 import io.homo.superresolution.core.graphics.opengl.framebuffer.GlFrameBuffer;
@@ -52,11 +54,12 @@ public class NanoVGContextWrapper {
     public NanoVGContextWrapper(int nvgFlags) {
         rawContext = new io.homo.superresolution.thirdparty.nanovg.NanoVGContext(nvgFlags);
         rastPtr = 0;
-        frameBuffer = GlFrameBuffer.create(
-                TextureFormat.R11G11B10F,
-                TextureFormat.DEPTH24_STENCIL8,
-                (int) MinecraftWindow.getWindowWidth(),
-                (int) MinecraftWindow.getWindowHeight()
+        frameBuffer = (GlFrameBuffer) RenderSystems.current().device().createFramebuffer(
+                FramebufferDescription.create()
+                        .colorFormat(TextureFormat.R11G11B10F)
+                        .depthFormat(TextureFormat.DEPTH24_STENCIL8)
+                        .size((int) MinecraftWindow.getWindowWidth(), (int) MinecraftWindow.getWindowHeight())
+                        .build()
         );
         frameBuffer.setClearColorRGBA(0, 0, 0, 1);
     }
@@ -82,27 +85,25 @@ public class NanoVGContextWrapper {
         }
         frameBuffer.bind(FrameBufferBindPoint.All);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-        if (true) {
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, (int) RenderHandlerManager.getOriginRenderTarget().handle());
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (int) frameBuffer.handle());
-            glBlitFramebuffer(
-                    0,
-                    0,
-                    Minecraft.getInstance().getMainRenderTarget().width,
-                    Minecraft.getInstance().getMainRenderTarget().height,
-                    0,
-                    0,
-                    frameBuffer.getWidth(),
-                    frameBuffer.getHeight(),
-                    GL_COLOR_BUFFER_BIT,
-                    GL_LINEAR
-            );
-        }
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, (int) RenderHandlerManager.getOriginRenderTarget().handle());
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (int) frameBuffer.handle());
+        glBlitFramebuffer(
+                0,
+                0,
+                Minecraft.getInstance().getMainRenderTarget().width,
+                Minecraft.getInstance().getMainRenderTarget().height,
+                0,
+                0,
+                frameBuffer.getWidth(),
+                frameBuffer.getHeight(),
+                GL_COLOR_BUFFER_BIT,
+                GL_LINEAR
+        );
         globalScale = (float) Math.max(UIScalingCalculator.calculateUIScaling((int) screenSize.x, (int) screenSize.y, 1.2f), 1);
         rawContext.beginFrame(
                 screenSize.x,
                 screenSize.y,
-                globalScale
+                globalScale * 1.2f
         );
         rawContext.reset();
         rawContext.scale(1, 1);

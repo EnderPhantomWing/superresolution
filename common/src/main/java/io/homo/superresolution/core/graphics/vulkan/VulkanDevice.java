@@ -25,14 +25,21 @@ import io.homo.superresolution.core.graphics.impl.command.ICommandBuffer;
 import io.homo.superresolution.core.graphics.impl.command.ICommandDecoder;
 import io.homo.superresolution.core.graphics.impl.command.ICommandPool;
 import io.homo.superresolution.core.graphics.impl.device.IDevice;
+import io.homo.superresolution.core.graphics.impl.framebuffer.FramebufferDescription;
+import io.homo.superresolution.core.graphics.impl.framebuffer.IFrameBuffer;
 import io.homo.superresolution.core.graphics.impl.pipeline.ComputePipeline;
 import io.homo.superresolution.core.graphics.impl.pipeline.GraphicsPipeline;
 import io.homo.superresolution.core.graphics.impl.pipeline.PipelineDescriptorSet;
 import io.homo.superresolution.core.graphics.impl.pipeline.RenderPass;
+import io.homo.superresolution.core.graphics.impl.sampler.ISampler;
+import io.homo.superresolution.core.graphics.impl.sampler.SamplerDescription;
 import io.homo.superresolution.core.graphics.impl.shader.IShaderProgram;
 import io.homo.superresolution.core.graphics.impl.shader.ShaderDescription;
 import io.homo.superresolution.core.graphics.impl.texture.ITexture;
+import io.homo.superresolution.core.graphics.impl.texture.ITextureView;
 import io.homo.superresolution.core.graphics.impl.texture.TextureDescription;
+import io.homo.superresolution.core.graphics.impl.texture.TextureViewDescription;
+import io.homo.superresolution.core.graphics.impl.validation.ValidatedCommandDecoder;
 import io.homo.superresolution.core.graphics.impl.vertex.IVertexBuffer;
 import io.homo.superresolution.core.graphics.impl.vertex.VertexBufferDescription;
 import org.lwjgl.system.MemoryStack;
@@ -42,7 +49,9 @@ import org.lwjgl.vulkan.VkSubmitInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static io.homo.superresolution.core.graphics.vulkan.utils.VulkanUtils.VK_CHECK;
+import java.util.EnumSet;
+
+import static io.homo.superresolution.core.graphics.vulkan.VulkanUtils.VK_CHECK;
 import static org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_SUBMIT_INFO;
 import static org.lwjgl.vulkan.VK10.vkQueueSubmit;
 
@@ -51,18 +60,19 @@ public class VulkanDevice implements IDevice {
     private final VkPhysicalDevice physicalDevice;
     private final VkDevice device;
     private final VulkanQueue mainQueue;
-    private final VulkanCommandPool commandManager;
     private final VulkanCommandPool defaultCommandPool;
     private final VulkanCommandDecoder commandDecoder;
+    private final ValidatedCommandDecoder validatedCommandDecoder;
 
 
     public VulkanDevice(VkPhysicalDevice physicalDevice, VkDevice device, int graphicsQueueFamilyIndex) {
         this.physicalDevice = physicalDevice;
         this.device = device;
         this.mainQueue = new VulkanQueue(this, graphicsQueueFamilyIndex);
-        this.commandManager = new VulkanCommandPool(this, java.util.EnumSet.of(CommandPoolFlags.Reset));
-        this.defaultCommandPool = commandManager;
+        this.defaultCommandPool= new VulkanCommandPool(this, EnumSet.of(CommandPoolFlags.Reset));
         this.commandDecoder = new VulkanCommandDecoder(this);
+        this.validatedCommandDecoder = new ValidatedCommandDecoder(commandDecoder);
+        defaultCommandPool.init();
     }
 
     @Override
@@ -71,38 +81,72 @@ public class VulkanDevice implements IDevice {
     }
 
     @Override
+    public ISampler createSampler(SamplerDescription description) {
+        return new VulkanSampler(this, description);
+    }
+
+    @Override
+    public ITextureView createTextureView(TextureViewDescription description) {
+        return new VulkanTextureView(this, description);
+    }
+
+    @Override
+    public IFrameBuffer createFramebuffer(FramebufferDescription description) {
+        return new VulkanFramebuffer(this, description);
+    }
+
+    @Override
     public IShaderProgram createShaderProgram(ShaderDescription description) {
-        return null;
+        VulkanShaderProgram program = new VulkanShaderProgram(this, description);
+        program.compile();
+        return program;
     }
 
     @Override
     public IVertexBuffer createVertexBuffer(VertexBufferDescription description) {
-        return null;
+        return new VulkanVertexBuffer(this, description);
     }
 
     @Override
     public IBuffer createBuffer(BufferDescription description) {
-        return null;
+        return new VulkanBuffer(this, description);
     }
 
     @Override
     public RenderPass createRenderPass(RenderPass.Builder builder) {
-        return null;
+        return new VulkanRenderPass(
+                this,
+                builder.getFrameBuffer(),
+                builder.getClearState()
+        );
     }
 
     @Override
     public PipelineDescriptorSet createDescriptorSet(IShaderProgram shader) {
-        return null;
+        return new VulkanPipelineDescriptorSet(this, shader);
     }
 
     @Override
     public ComputePipeline createComputePipeline(ComputePipeline.Builder builder) {
-        return null;
+        PipelineDescriptorSet descriptorSet = createDescriptorSet(builder.shader());
+        return new VulkanComputePipeline(this, builder.shader(), descriptorSet);
     }
 
     @Override
     public GraphicsPipeline createGraphicsPipeline(GraphicsPipeline.Builder builder) {
-        return null;
+        PipelineDescriptorSet descriptorSet = createDescriptorSet(builder.shader());
+        return new VulkanGraphicsPipeline(
+                this,
+                builder.shader(),
+                builder.renderPass(),
+                builder.rasterization(),
+                builder.depthStencil(),
+                builder.colorBlend(),
+                builder.dynamicStates(),
+                builder.primitiveType(),
+                builder.vertexFormat(),
+                descriptorSet
+        );
     }
 
     @Override
@@ -128,7 +172,7 @@ public class VulkanDevice implements IDevice {
 
     @Override
     public ICommandDecoder commandDecoder() {
-        return commandDecoder;
+        return validatedCommandDecoder;
     }
 
     @Override
@@ -207,6 +251,7 @@ public class VulkanDevice implements IDevice {
             VK_CHECK(vkQueueSubmit(mainQueue.getQueue(), submitInfo, fence));
             commandBuffer.markSubmitted();
         }
+        reapCompletedTransientResources();
         return fence;
     }
 
@@ -225,23 +270,12 @@ public class VulkanDevice implements IDevice {
             VK_CHECK(vkQueueSubmit(mainQueue.getQueue(), submitInfo, fence));
             commandBuffer.markSubmitted();
         }
+        reapCompletedTransientResources();
     }
 
-    /**
-     * 获取VulkanCommandManager实例
-     *
-     * @return VulkanCommandManager实例
-     */
-    public VulkanCommandPool getCommandManager() {
-        return commandManager;
-    }
-
-    /**
-     * 销毁资源
-     */
     public void destroy() {
-        if (commandManager != null) {
-            commandManager.destroy();
+        if (defaultCommandPool != null) {
+            defaultCommandPool.destroy();
         }
         LOGGER.debug("VulkanDevice 资源已清理");
     }
@@ -256,5 +290,11 @@ public class VulkanDevice implements IDevice {
 
     public VulkanQueue getMainQueue() {
         return mainQueue;
+    }
+
+    private void reapCompletedTransientResources() {
+        for (VulkanCommandBuffer buffer : defaultCommandPool.getAllocatedBuffers()) {
+            buffer.destroyTransientResourcesIfComplete();
+        }
     }
 }

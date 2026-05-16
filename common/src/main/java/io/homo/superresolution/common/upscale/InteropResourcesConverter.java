@@ -21,6 +21,7 @@ package io.homo.superresolution.common.upscale;
 import io.homo.superresolution.core.RenderSystems;
 import io.homo.superresolution.core.graphics.impl.FullscreenQuad;
 import io.homo.superresolution.core.graphics.impl.command.ICommandBuffer;
+import io.homo.superresolution.core.graphics.impl.framebuffer.FramebufferDescription;
 import io.homo.superresolution.core.graphics.impl.framebuffer.IFrameBuffer;
 import io.homo.superresolution.core.graphics.impl.pipeline.ComputePipeline;
 import io.homo.superresolution.core.graphics.impl.pipeline.GraphicsPipeline;
@@ -35,13 +36,6 @@ import io.homo.superresolution.core.graphics.impl.shader.ShaderType;
 import io.homo.superresolution.core.graphics.impl.texture.ITexture;
 import io.homo.superresolution.core.graphics.impl.texture.TextureFormat;
 import io.homo.superresolution.core.graphics.impl.vertex.PrimitiveType;
-import io.homo.superresolution.core.graphics.opengl.GlState;
-import io.homo.superresolution.core.graphics.opengl.framebuffer.GlFrameBuffer;
-import io.homo.superresolution.core.graphics.opengl.framebuffer.GlFrameBufferAttachment;
-import io.homo.superresolution.core.graphics.opengl.pipeline.GlComputePipeline;
-import io.homo.superresolution.core.graphics.opengl.shader.GlShaderProgram;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL41;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -49,6 +43,7 @@ import java.util.Map;
 
 public class InteropResourcesConverter {
     private static final Map<String, ComputePipeline> flipYPipelineCache = new HashMap<>();
+    private static final Map<String, ComputePipeline> processInputPipelineCache = new HashMap<>();
     private static ComputePipeline flipMotionVectorYPipeline;
     private static IShaderProgram flipMotionVectorYShader;
 
@@ -57,7 +52,6 @@ public class InteropResourcesConverter {
     private static RenderPass depthPreprocessRenderPass;
     private static IFrameBuffer depthPreprocessFrameBuffer;
 
-    //private static RenderGrape renderGrape;
     private static boolean isInit = false;
 
     private static String toComputeShaderFormatQualifier(TextureFormat format) {
@@ -98,9 +92,9 @@ public class InteropResourcesConverter {
 
         builder.addDefine("OUTPUT_FORMAT", formatQualifier);
 
-        GlShaderProgram shader = RenderSystems.current().device().createShaderProgram(builder.build());
+        IShaderProgram shader = RenderSystems.current().device().createShaderProgram(builder.build());
         shader.compile();
-        ComputePipeline computePipeline = (ComputePipeline) GlComputePipeline.builder()
+        ComputePipeline computePipeline = ComputePipeline.builder()
                 .shader(shader)
                 .build(RenderSystems.opengl().device());
 
@@ -118,7 +112,7 @@ public class InteropResourcesConverter {
                         .uniformStorageTexture("outputMotionVector", 1)
                         .build());
         flipMotionVectorYShader.compile();
-        flipMotionVectorYPipeline = GlComputePipeline.builder()
+        flipMotionVectorYPipeline = ComputePipeline.builder()
                 .shader(flipMotionVectorYShader)
                 .build(RenderSystems.opengl().device());
 
@@ -141,19 +135,20 @@ public class InteropResourcesConverter {
                         .build()
         );
         depthPreprocessShader.compile();
+        depthPreprocessRenderPass = RenderSystems.current().device().createRenderPass(
+                RenderPass.builder()
+                        .frameBuffer(depthPreprocessFrameBuffer)
+                        .clearDepthOnBegin(1.0f)
+        );
         depthPreprocessPipeline = RenderSystems.current().device().createGraphicsPipeline(
                 GraphicsPipeline.builder()
                         .shader(depthPreprocessShader)
+                        .renderPass(depthPreprocessRenderPass)
+                        .primitiveType(PrimitiveType.TriangleStrip)
                         .rasterization((r) -> r.cullMode(CullMode.None))
                         .depthStencil((r) -> r.depthCompareOp(CompareOp.Always).depthTestEnable(true).depthWriteEnable(true))
                         .dynamicStates(DynamicStateFlags.Viewport)
                         .vertexFormat(FullscreenQuad.getVertexFormat())
-        );
-        depthPreprocessRenderPass = RenderSystems.current().device().createRenderPass(
-                RenderPass.builder()
-                        .pipeline(depthPreprocessPipeline)
-                        .frameBuffer(depthPreprocessFrameBuffer)
-                        .clearDepthOnBegin(1.0f)
         );
     }
 
@@ -171,9 +166,8 @@ public class InteropResourcesConverter {
         computePipeline.descriptorSet().storageImage("outputTexture", output);
         computePipeline.descriptorSet().update();
         commandBuffer.begin();
-        RenderSystems.current().device().commandDecoder().dispatch(
-                commandBuffer,
-                computePipeline,
+        commandBuffer.bindPipeline(computePipeline);
+        commandBuffer.dispatch(
                 (input.getWidth() + 15) / 16,
                 (input.getHeight() + 15) / 16,
                 1
@@ -186,47 +180,97 @@ public class InteropResourcesConverter {
         if (isInit) {
             return;
         }
-        depthPreprocessFrameBuffer = GlFrameBuffer.create(null, TextureFormat.DEPTH32F, 16, 16);
+        depthPreprocessFrameBuffer = RenderSystems.current().device().createFramebuffer(
+                FramebufferDescription.create()
+                        .depthFormat(TextureFormat.DEPTH32F)
+                        .size(16, 16)
+                        .build());
         initShaders();
         isInit = true;
     }
 
-    public static void preprocessDepth(ITexture inputDepth, ITexture outputDepth) {
+    public static void processInputTextures(
+            ITexture inputColor, ITexture outputColor,
+            ITexture inputDepth, ITexture outputDepth,
+            ITexture inputMotionVectors, ITexture outputMotionVectors,
+            ITexture inputExposure, ITexture outputExposure) {
         if (!isInit) {
             init();
         }
-        if (depthPreprocessFrameBuffer.getDepthStencilAttachment().texture() != inputDepth) {
-            ((GlFrameBuffer) depthPreprocessFrameBuffer).addAttachment(
-                    new GlFrameBufferAttachment(
-                            outputDepth.getTextureFormat().isStencil() ? GlFrameBufferAttachment.FrameBufferAttachmentType.DEPTH_STENCIL : GlFrameBufferAttachment.FrameBufferAttachmentType.DEPTH,
-                            outputDepth
-                    )
-            );
 
+        boolean hasDepth = inputDepth != null && outputDepth != null;
+        boolean hasMV = inputMotionVectors != null && outputMotionVectors != null;
+        boolean hasExposure = inputExposure != null && outputExposure != null;
+
+        String colorFormatQualifier = toComputeShaderFormatQualifier(outputColor.getTextureFormat());
+        if (colorFormatQualifier == null) {
+            throw new IllegalArgumentException("Unsupported color format for processInputTextures: " + outputColor.getTextureFormat());
         }
-        depthPreprocessPipeline.descriptorSet().samplerTexture("inputDepth", 0, inputDepth);
-        try (GlState state = new GlState(GlState.STATE_DEPTH_TEST)) {
-            ICommandBuffer commandBuffer = RenderSystems.current().device().defaultCommandPool().createCommandBuffer();
-            commandBuffer.begin();
-            RenderSystems.opengl().device().commandDecoder().setViewport(
-                    commandBuffer,
-                    0,
-                    0,
-                    outputDepth.getWidth(),
-                    outputDepth.getHeight()
-            );
-            RenderSystems.opengl().device().commandDecoder().draw(
-                    commandBuffer,
-                    depthPreprocessRenderPass,
-                    PrimitiveType.TriangleStrip,
-                    FullscreenQuad.create(RenderSystems.opengl().device()),
-                    4,
-                    0
-            );
-            commandBuffer.end();
-            RenderSystems.current().device().submitCommandBuffer(commandBuffer);
+
+        String key = "processInput_" + outputColor.getTextureFormat().name()
+                + (hasDepth ? "_D" : "")
+                + (hasMV ? "_MV" : "")
+                + (hasExposure ? "_E" : "");
+
+        ComputePipeline pipeline = processInputPipelineCache.get(key);
+        if (pipeline == null) {
+            ShaderDescription.Builder builder = ShaderDescription.create()
+                    .compute(new ShaderSource(ShaderType.Compute, "/shader/interop/process_input_textures.comp.glsl", true))
+                    .name("interop_" + key)
+                    .uniformSamplerTexture("inputColor", 0)
+                    .uniformStorageTexture("outputColor", 1);
+            builder.addDefine("COLOR_FORMAT", colorFormatQualifier);
+
+            if (hasDepth) {
+                builder.uniformSamplerTexture("inputDepth", 2)
+                        .uniformStorageTexture("outputDepth", 3);
+                builder.addDefine("HAS_DEPTH", "1");
+            }
+            if (hasMV) {
+                builder.uniformSamplerTexture("inputMotionVectors", 4)
+                        .uniformStorageTexture("outputMotionVectors", 5);
+                builder.addDefine("HAS_MOTION_VECTOR", "1");
+            }
+            if (hasExposure) {
+                builder.uniformSamplerTexture("inputExposure", 6)
+                        .uniformStorageTexture("outputExposure", 7);
+                builder.addDefine("HAS_EXPOSURE", "1");
+            }
+
+            IShaderProgram shader = RenderSystems.current().device().createShaderProgram(builder.build());
+            shader.compile();
+            pipeline = ComputePipeline.builder()
+                    .shader(shader)
+                    .build(RenderSystems.opengl().device());
+            processInputPipelineCache.put(key, pipeline);
         }
-        GL41.glDepthFunc(GL41.GL_LEQUAL);
+
+        pipeline.descriptorSet().samplerTexture("inputColor", inputColor);
+        pipeline.descriptorSet().storageImage("outputColor", outputColor);
+        if (hasDepth) {
+            pipeline.descriptorSet().samplerTexture("inputDepth", inputDepth);
+            pipeline.descriptorSet().storageImage("outputDepth", outputDepth);
+        }
+        if (hasMV) {
+            pipeline.descriptorSet().samplerTexture("inputMotionVectors", inputMotionVectors);
+            pipeline.descriptorSet().storageImage("outputMotionVectors", outputMotionVectors);
+        }
+        if (hasExposure) {
+            pipeline.descriptorSet().samplerTexture("inputExposure", inputExposure);
+            pipeline.descriptorSet().storageImage("outputExposure", outputExposure);
+        }
+        pipeline.descriptorSet().update();
+
+        ICommandBuffer commandBuffer = RenderSystems.current().device().defaultCommandPool().createCommandBuffer();
+        commandBuffer.begin();
+        commandBuffer.bindPipeline(pipeline);
+        commandBuffer.dispatch(
+                (outputColor.getWidth() + 15) / 16,
+                (outputColor.getHeight() + 15) / 16,
+                1
+        );
+        commandBuffer.end();
+        RenderSystems.current().device().submitCommandBuffer(commandBuffer);
     }
 
     public static void flipMotionVectorY(ITexture input, ITexture output) {
@@ -239,9 +283,8 @@ public class InteropResourcesConverter {
         flipMotionVectorYPipeline.descriptorSet().storageImage("outputMotionVector", output);
         flipMotionVectorYPipeline.descriptorSet().update();
         commandBuffer.begin();
-        RenderSystems.current().device().commandDecoder().dispatch(
-                commandBuffer,
-                flipMotionVectorYPipeline,
+        commandBuffer.bindPipeline(flipMotionVectorYPipeline);
+        commandBuffer.dispatch(
                 (input.getWidth() + 15) / 16,
                 (input.getHeight() + 15) / 16,
                 1

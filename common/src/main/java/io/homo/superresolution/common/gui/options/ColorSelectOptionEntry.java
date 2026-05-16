@@ -36,7 +36,7 @@ import io.homo.superresolution.thirdparty.yoga.appliedenergistics.yoga.YogaGutte
 import java.util.function.Consumer;
 
 public class ColorSelectOptionEntry extends AbstractOptionEntry<Color, ColorSelectOptionEntry> {
-    private static final float SLIDER_WIDTH = 200f;
+    private static final float SLIDER_WIDTH = 250f;
     protected MaterialSlider redSlider;
     protected MaterialSlider greenSlider;
     protected MaterialSlider blueSlider;
@@ -47,7 +47,8 @@ public class ColorSelectOptionEntry extends AbstractOptionEntry<Color, ColorSele
     protected ContainerWidget sliderContainer;
     protected ContainerWidget contentContainer;
 
-    protected Consumer<Color> valueChangeListener = (value)->{};
+    protected Consumer<Color> valueChangeListener = (value) -> {
+    };
 
     private boolean suppressSliderChangeEvent = false;
 
@@ -89,7 +90,7 @@ public class ColorSelectOptionEntry extends AbstractOptionEntry<Color, ColorSele
                 .fontSize(14);
         redValueLabel.layout().setMinWidth(50);
 
-        redSlider = MaterialSlider.create(MaterialSliderSize.Small, SLIDER_WIDTH);
+        redSlider = MaterialSlider.create(MaterialSliderSize.ExtraSmall, SLIDER_WIDTH);
         redSlider.style().valueIndicator(false);
         redSlider.setMin(0);
         redSlider.setMax(255);
@@ -129,7 +130,7 @@ public class ColorSelectOptionEntry extends AbstractOptionEntry<Color, ColorSele
                 .fontSize(14);
         greenValueLabel.layout().setMinWidth(50);
 
-        greenSlider = MaterialSlider.create(MaterialSliderSize.Small, SLIDER_WIDTH);
+        greenSlider = MaterialSlider.create(MaterialSliderSize.ExtraSmall, SLIDER_WIDTH);
         greenSlider.style().valueIndicator(false);
         greenSlider.setMin(0);
         greenSlider.setMax(255);
@@ -170,7 +171,7 @@ public class ColorSelectOptionEntry extends AbstractOptionEntry<Color, ColorSele
                 .fontSize(14);
         blueValueLabel.layout().setMinWidth(50);
 
-        blueSlider = MaterialSlider.create(MaterialSliderSize.Small, SLIDER_WIDTH);
+        blueSlider = MaterialSlider.create(MaterialSliderSize.ExtraSmall, SLIDER_WIDTH);
         blueSlider.style().valueIndicator(false);
         blueSlider.setMin(0);
         blueSlider.setMax(255);
@@ -204,7 +205,7 @@ public class ColorSelectOptionEntry extends AbstractOptionEntry<Color, ColorSele
         colorPanelWidget = new ColorPanelWidget();
         colorPanelWidget.layout().setHeightPercent(100);
         colorPanelWidget.layout().setWidth(48);
-        colorPanelWidget.layout().setMargin(YogaEdge.RIGHT,12);
+        colorPanelWidget.layout().setMargin(YogaEdge.RIGHT, 12);
         contentContainer.addChild(colorPanelWidget);
         contentContainer.addChild(sliderContainer);
 
@@ -250,7 +251,7 @@ public class ColorSelectOptionEntry extends AbstractOptionEntry<Color, ColorSele
         return this;
     }
 
-    public class ColorPanelWidget extends AbstractWidget<ColorPanelWidget>{
+    public class ColorPanelWidget extends AbstractWidget<ColorPanelWidget> {
 
         @Override
         protected void init() {

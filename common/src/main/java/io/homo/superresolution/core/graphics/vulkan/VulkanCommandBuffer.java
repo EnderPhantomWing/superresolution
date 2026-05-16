@@ -20,21 +20,30 @@ package io.homo.superresolution.core.graphics.vulkan;
 
 import io.homo.superresolution.core.graphics.impl.command.*;
 import io.homo.superresolution.core.graphics.impl.device.IDevice;
+import io.homo.superresolution.core.impl.Destroyable;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferBeginInfo;
 
-import static io.homo.superresolution.core.graphics.vulkan.utils.VulkanUtils.VK_CHECK;
+import java.util.ArrayList;
+import java.util.List;
+
+import static io.homo.superresolution.core.graphics.vulkan.VulkanUtils.VK_CHECK;
 import static org.lwjgl.vulkan.VK10.*;
 
 public class VulkanCommandBuffer implements ICommandBuffer {
     private final VulkanDevice vulkanDevice;
     private final VulkanCommandPool ownerPool;
     private final CommandBufferBehavior behavior;
+    private final List<Destroyable> transientResources = new ArrayList<>();
     private CommandBufferState state = CommandBufferState.Executable;
     private long reusableFence = VK_NULL_HANDLE;
     private boolean inFlight = false;
     private VkCommandBuffer nativeCommandBuffer;
+    private VulkanRenderPass activeRenderPass;
+    private VulkanGraphicsPipeline boundGraphicsPipeline;
+    private VulkanComputePipeline boundComputePipeline;
+    private boolean renderPassActive;
 
     public VulkanCommandBuffer(VulkanDevice vulkanDevice, VulkanCommandPool ownerPool, CommandBufferBehavior behavior) {
         this.vulkanDevice = vulkanDevice;
@@ -62,6 +71,7 @@ public class VulkanCommandBuffer implements ICommandBuffer {
                     .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
             VK_CHECK(vkBeginCommandBuffer(nativeCommandBuffer, beginInfo));
         }
+        clearRenderPassState();
         state = CommandBufferState.Recording;
     }
 
@@ -70,6 +80,9 @@ public class VulkanCommandBuffer implements ICommandBuffer {
         ensureNotDestroyed();
         if (state != CommandBufferState.Recording) {
             throw new IllegalStateException("Command buffer is not in recording state");
+        }
+        if (renderPassActive) {
+            throw new IllegalStateException("Command buffer still has an active render pass; call endRenderPass first");
         }
         VK_CHECK(vkEndCommandBuffer(nativeCommandBuffer));
         state = CommandBufferState.Executable;
@@ -86,6 +99,7 @@ public class VulkanCommandBuffer implements ICommandBuffer {
         }
         ensureNotInFlight();
         VK_CHECK(vkResetCommandBuffer(nativeCommandBuffer, 0));
+        clearRenderPassState();
         state = CommandBufferState.Executable;
     }
 
@@ -95,6 +109,7 @@ public class VulkanCommandBuffer implements ICommandBuffer {
             return;
         }
         ensureNotInFlight();
+        destroyTransientResources();
         if (reusableFence != VK_NULL_HANDLE) {
             ownerPool.getFencePool().destroyFence(reusableFence);
             reusableFence = VK_NULL_HANDLE;
@@ -102,6 +117,7 @@ public class VulkanCommandBuffer implements ICommandBuffer {
         ownerPool.freeCommandBuffer(nativeCommandBuffer);
         ownerPool.onCommandBufferDestroyed(this);
         nativeCommandBuffer = null;
+        clearRenderPassState();
         state = CommandBufferState.Destroyed;
     }
 
@@ -124,7 +140,7 @@ public class VulkanCommandBuffer implements ICommandBuffer {
     }
 
     @Override
-    public ICommandDecoder getDecoder() {
+    public ICommandDecoder decoder() {
         return vulkanDevice.commandDecoder();
     }
 
@@ -153,11 +169,13 @@ public class VulkanCommandBuffer implements ICommandBuffer {
     public boolean isFenceSignaled() {
         if (reusableFence == VK_NULL_HANDLE) {
             inFlight = false;
+            destroyTransientResourcesIfComplete();
             return true;
         }
         int status = vkGetFenceStatus(vulkanDevice.getVkDevice(), reusableFence);
         if (status == VK_SUCCESS) {
             inFlight = false;
+            destroyTransientResourcesIfComplete();
             return true;
         }
         if (status == VK_NOT_READY) {
@@ -171,10 +189,12 @@ public class VulkanCommandBuffer implements ICommandBuffer {
     public void waitForFence() {
         if (reusableFence == VK_NULL_HANDLE) {
             inFlight = false;
+            destroyTransientResourcesIfComplete();
             return;
         }
         VK_CHECK(vkWaitForFences(vulkanDevice.getVkDevice(), reusableFence, true, Long.MAX_VALUE));
         inFlight = false;
+        destroyTransientResourcesIfComplete();
     }
 
     @Override
@@ -199,6 +219,61 @@ public class VulkanCommandBuffer implements ICommandBuffer {
         inFlight = true;
     }
 
+    void _beginRenderPass(VulkanRenderPass renderPass) {
+        ensureNotDestroyed();
+        if (state != CommandBufferState.Recording) {
+            throw new IllegalStateException("Command buffer is not in recording state");
+        }
+        if (renderPassActive) {
+            throw new IllegalStateException("Render pass is already active");
+        }
+        this.activeRenderPass = renderPass;
+        this.boundGraphicsPipeline = null;
+        this.renderPassActive = true;
+    }
+
+    void _endRenderPass() {
+        if (!renderPassActive) {
+            throw new IllegalStateException("No active render pass to end");
+        }
+        boundGraphicsPipeline = null;
+        clearRenderPassState();
+    }
+
+    void bindGraphicsPipeline(VulkanGraphicsPipeline pipeline) {
+        this.boundGraphicsPipeline = pipeline;
+    }
+
+    void bindComputePipeline(VulkanComputePipeline pipeline) {
+        this.boundComputePipeline = pipeline;
+    }
+
+    VulkanGraphicsPipeline getBoundGraphicsPipeline() {
+        return boundGraphicsPipeline;
+    }
+
+    VulkanComputePipeline getBoundComputePipeline() {
+        return boundComputePipeline;
+    }
+
+    boolean isRenderPassActive() {
+        return renderPassActive;
+    }
+
+    VulkanRenderPass getActiveRenderPass() {
+        return activeRenderPass;
+    }
+
+    void addTransientResource(Destroyable destroyable) {
+        transientResources.add(destroyable);
+    }
+
+    void destroyTransientResourcesIfComplete() {
+        if (!transientResources.isEmpty() && !isInFlight()) {
+            destroyTransientResources();
+        }
+    }
+
     private void ensureNotDestroyed() {
         if (state == CommandBufferState.Destroyed || nativeCommandBuffer == null) {
             throw new IllegalStateException("Command buffer is destroyed");
@@ -212,5 +287,22 @@ public class VulkanCommandBuffer implements ICommandBuffer {
         if (!isFenceSignaled()) {
             throw new IllegalStateException("Command buffer is still in-flight");
         }
+    }
+
+    private void clearRenderPassState() {
+        activeRenderPass = null;
+        boundGraphicsPipeline = null;
+        boundComputePipeline = null;
+        renderPassActive = false;
+    }
+
+    private void destroyTransientResources() {
+        if (transientResources.isEmpty()) {
+            return;
+        }
+        for (Destroyable destroyable : transientResources) {
+            destroyable.destroy();
+        }
+        transientResources.clear();
     }
 }

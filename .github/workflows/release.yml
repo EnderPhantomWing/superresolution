@@ -20,6 +20,16 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Restore native cache (Linux)
+        id: native-cache-linux
+        uses: actions/cache@v4
+        with:
+          path: |
+            common/src/main/resources/lib
+          key: native-libs-linux-${{ hashFiles('native/**') }}
+          restore-keys: |
+            native-libs-linux-
+
       - name: Install dependencies
         run: |
           sudo apt update
@@ -56,16 +66,6 @@ jobs:
           gradle-home-cache-excludes: |
             caches/build-cache-1
 
-      - name: Restore native cache (Linux)
-        id: native-cache-linux
-        uses: actions/cache@v4
-        with:
-          path: |
-            common/src/main/resources/lib
-          key: native-libs-linux-${{ hashFiles('native/**') }}
-          restore-keys: |
-            native-libs-linux-
-
       - name: Install Python packages
         run: pip install pyyaml simplejson
 
@@ -74,7 +74,6 @@ jobs:
         run: python init.py
 
       - name: Build native libraries (Linux)
-        if: ${{ !cancelled() }}
         id: build
         run: ./gradlew buildNative
         continue-on-error: true
@@ -84,7 +83,7 @@ jobs:
         with:
           name: native-libs-linux
           path: |
-            common/src/main/resources/lib/**/*.so
+            common/src/main/resources/lib/**/*
           if-no-files-found: error
 
   build-native-windows:
@@ -95,6 +94,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Restore native cache (Windows)
+        id: native-cache-windows
+        uses: actions/cache@v4
+        with:
+          path: |
+            common/src/main/resources/lib
+          key: native-libs-windows-${{ hashFiles('native/**') }}
+          restore-keys: |
+            native-libs-windows-
 
       - name: Install Vulkan SDK
         uses: humbletim/install-vulkan-sdk@033219e2d69dd4d3e873e217eb385fdd4b4438f4
@@ -122,16 +131,6 @@ jobs:
           gradle-home-cache-excludes: |
             caches/build-cache-1
 
-      - name: Restore native cache (Windows)
-        id: native-cache-windows
-        uses: actions/cache@v4
-        with:
-          path: |
-            common/src/main/resources/lib
-          key: native-libs-windows-${{ hashFiles('native/**') }}
-          restore-keys: |
-            native-libs-windows-
-
       - name: Install Python packages
         run: pip install pyyaml simplejson
 
@@ -140,7 +139,6 @@ jobs:
         run: python init.py
 
       - name: Build native libraries (Windows)
-        if: ${{ !cancelled()}}
         id: build
         run: .\gradlew.bat buildNative
         continue-on-error: true
@@ -150,7 +148,7 @@ jobs:
         with:
           name: native-libs-windows
           path: |
-            common/src/main/resources/lib/**/*.dll
+            common/src/main/resources/lib/**/*
           if-no-files-found: error
 
   build-and-upload:

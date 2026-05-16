@@ -22,16 +22,76 @@ package io.homo.superresolution.common.minecraft;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 
 #if MC_VER > MC_1_21_4
-import com.mojang.blaze3d.opengl.GlDevice;
+    #if MC_VER <= MC_1_21_11
+    //He delete this line on commit 09d38666d75667565cec2e34664260e32ad1e639, but we need to use it here.
+    //他这样做一定有他的道理
+    //草
+    import com.mojang.blaze3d.opengl.GlDevice;
+    #endif
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.opengl.DirectStateAccess;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Objects;
 
 public class MinecraftRenderTargetUtil {
-    public static int getFboId(RenderTarget renderTarget) {
-        return ((GlTexture) Objects.requireNonNull(renderTarget.getColorTexture())).getFbo(((GlDevice) RenderSystem.getDevice()).directStateAccess(), renderTarget.getDepthTexture());
+    private static Class<?> cachedGlDeviceClass;
+    private static Method cachedGlDeviceDirectStateAccessMethod;
+
+    #if MC_VER > MC_1_21_11
+    private static Class<?> cachedGpuDeviceClass;
+    private static Field cachedGpuDeviceBackendField;
+
+    static {
+        try {
+            cachedGlDeviceClass = Class.forName("com.mojang.blaze3d.opengl.GlDevice");
+            cachedGpuDeviceClass = Class.forName("com.mojang.blaze3d.systems.GpuDevice");
+            cachedGpuDeviceBackendField = cachedGpuDeviceClass.getDeclaredField("backend");
+            cachedGpuDeviceBackendField.setAccessible(true);
+            cachedGlDeviceDirectStateAccessMethod = cachedGlDeviceClass.getMethod("directStateAccess");
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
     }
+    #else
+    //On <=1.21.11
+    //java.lang.RuntimeException: java.lang.ClassNotFoundException: com.mojang.blaze3d.opengl.GlDevice 
+
+//    static {
+//        try {
+//            cachedGlDeviceClass = Class.forName("com.mojang.blaze3d.opengl.GlDevice");
+//            cachedGlDeviceDirectStateAccessMethod = cachedGlDeviceClass.getMethod("directStateAccess");
+//        } catch (Throwable e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
+    #endif
+
+    #if MC_VER > MC_1_21_11
+    public static int getFboId(RenderTarget renderTarget) {
+        try {
+            //getDevice返回的不是GlDevice，而是一个像验证层的东西，它的backend字段才是实际GlDevice
+            //RenderSystem.getDevice()->GpuDevice.backend-->GlDevice.directStateAccess()-->GlTexture.getFbo()
+            return ((GlTexture) Objects.requireNonNull(renderTarget.getColorTexture()))
+                    .getFbo((DirectStateAccess) cachedGlDeviceDirectStateAccessMethod.invoke(cachedGpuDeviceBackendField.get(RenderSystem.getDevice())), renderTarget.getDepthTexture());
+
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
+    }
+    #else
+    public static int getFboId(RenderTarget renderTarget) {
+        try {
+            //Rollback to 57b8c0474b29f511d88faba108b43e869f282192
+            return ((GlTexture) Objects.requireNonNull(renderTarget.getColorTexture())).getFbo(((GlDevice) RenderSystem.getDevice()).directStateAccess(), renderTarget.getDepthTexture());
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
+    }
+    #endif
 
     public static int getColorTexId(RenderTarget renderTarget) {
         return ((GlTexture) Objects.requireNonNull(renderTarget.getColorTexture())).glId();

@@ -1,3 +1,21 @@
+/*
+ * Super Resolution
+ * Copyright (c) 2026. 187J3X1-114514
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package io.homo.superresolution.common.mixin.core.parts;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,21 +35,39 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LevelRenderer.class)
 public class LevelRendererMixin_Future {
+    #if MC_VER > MC_1_21_11
     @Inject(method = "renderLevel", at = @At("HEAD"))
     private void renderLevel(
-            GraphicsResourceAllocator allocator, 
-            DeltaTracker deltaTracker, 
-            boolean renderBlockOutline, 
-            Camera camera, 
-            Matrix4f matrix4f1, 
-            Matrix4f projectionMatrix, 
-            Matrix4f frustumMatrix, 
-            GpuBufferSlice bufferSlice, 
-            Vector4f vector4f, 
-            boolean bool2, 
+            GraphicsResourceAllocator resourceAllocator,
+            DeltaTracker deltaTracker,
+            boolean renderOutline,
+            net.minecraft.client.renderer.state.level.CameraRenderState cameraState,
+            org.joml.Matrix4fc modelViewMatrix,
+            GpuBufferSlice terrainFog,
+            Vector4f fogColor,
+            boolean shouldRenderSky,
+            net.minecraft.client.renderer.chunk.ChunkSectionsToRender chunkSectionsToRender,
+            CallbackInfo ci
+    ) {
+        AlgorithmManager.setMatrixVanilla(cameraState.projectionMatrix, new Matrix4f(modelViewMatrix));
+    }
+    #else
+    @Inject(method = "renderLevel", at = @At("HEAD"))
+    private void renderLevel(
+            GraphicsResourceAllocator allocator,
+            DeltaTracker deltaTracker,
+            boolean renderBlockOutline,
+            Camera camera,
+            Matrix4f matrix4f1,
+            Matrix4f projectionMatrix,
+            Matrix4f frustumMatrix,
+            GpuBufferSlice bufferSlice,
+            Vector4f vector4f,
+            boolean bool2,
             CallbackInfo ci
     ) {
         AlgorithmManager.setMatrixVanilla(projectionMatrix, frustumMatrix);
     }
+    #endif
 }
 #endif

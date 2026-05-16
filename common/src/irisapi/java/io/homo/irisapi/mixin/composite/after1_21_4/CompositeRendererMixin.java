@@ -1,6 +1,6 @@
 /*
  * Super Resolution
- * Copyright (c) 2025. 187J3X1-114514
+ * Copyright (c) 2025-2026. 187J3X1-114514
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,12 +18,12 @@
 
 package io.homo.irisapi.mixin.composite.after1_21_4;
 
-import io.homo.irisapi.IrisCompositePassType;
+import io.homo.irisapi.*;
 import net.irisshaders.iris.pipeline.CompositeRenderer;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 
-#if MC_VER > MC_1_21_4
+#if MC_VER > MC_1_21_4 && MC_VER < MC_26_1
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -36,15 +36,12 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import io.homo.irisapi.IrisReflectionUtils;
-import io.homo.irisapi.NamedCompositePass;
-import io.homo.irisapi.PassEventHandler;
 import io.homo.irisapi.handlers.IrisRenderingPipelineHandler;
 
 #endif
 @Mixin(CompositeRenderer.class)
 public class CompositeRendererMixin {
-    #if MC_VER > MC_1_21_4
+    #if MC_VER > MC_1_21_4 && MC_VER < MC_26_1
     @Shadow(remap = false)
     @Final
     private ImmutableList<Object> passes;
@@ -54,7 +51,7 @@ public class CompositeRendererMixin {
         if (passIndex >= 0 && passIndex < this.passes.size()) {
             Object pass = this.passes.get(passIndex);
             handler.handle(
-                    (CompositeRenderer) (Object) this,
+                    new CompositeRendererAccessorImpl_After1201((CompositeRenderer) (Object) this),
                     (NamedCompositePass) pass,
                     IrisReflectionUtils.getCompositePassType(pass)
             );

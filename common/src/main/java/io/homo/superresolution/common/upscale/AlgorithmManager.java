@@ -21,6 +21,9 @@ package io.homo.superresolution.common.upscale;
 import io.homo.superresolution.api.InputResourceSet;
 import io.homo.superresolution.api.SuperResolutionAPI;
 import io.homo.superresolution.api.registry.AlgorithmDescription;
+import io.homo.superresolution.common.SuperResolution;
+import io.homo.superresolution.common.config.SuperResolutionConfig;
+import io.homo.superresolution.common.minecraft.MinecraftUtils;
 import io.homo.superresolution.common.minecraft.handler.RenderHandlerManager;
 import io.homo.superresolution.common.minecraft.handler.shadercompat.ShaderCompatHandler;
 import io.homo.superresolution.common.perf.PerformanceTracker;
@@ -36,8 +39,12 @@ import org.joml.Matrix4f;
 public class AlgorithmManager {
     public static AlgorithmParam param = new AlgorithmParam();
 
+    /**
+     * @deprecated MotionVectorsGenerator 已被弃用
+     */
+    @Deprecated
     public static GlFrameBuffer getMotionVectorsFrameBuffer() {
-        return (GlFrameBuffer) MotionVectorsGenerator.getMotionVectorsFrameBuffer();
+        return null;
     }
 
     public static void destroy() {
@@ -45,11 +52,30 @@ public class AlgorithmManager {
     }
 
     public static void resize(int width, int height) {
-        MotionVectorsGenerator.resize();
     }
 
     public static boolean isSupportAlgorithm(AlgorithmDescription<?> type) {
         return type.getRequirement().check().support();
+    }
+
+    public static boolean supportsJitter(AlgorithmDescription<?> type) {
+        return type == AlgorithmDescriptions.FSR2
+                || type == AlgorithmDescriptions.FSR
+                || type == AlgorithmDescriptions.XESS
+                || type == AlgorithmDescriptions.DLSS;
+    }
+
+    public static int getConfiguredJitterSequenceLength() {
+        AlgorithmDescription<?> type = SuperResolution.algorithmDescription != null
+                ? SuperResolution.algorithmDescription
+                : SuperResolutionConfig.getUpscaleAlgorithm();
+        if (!supportsJitter(type)) {
+            return 0;
+        }
+        return Fsr2Utils.ffxFsr2GetJitterPhaseCount(
+                RenderHandlerManager.getRenderWidth(),
+                RenderHandlerManager.getScreenWidth()
+        );
     }
 
     public static float extractVerticalFovDegrees(Matrix4f projectionMatrix) {
@@ -147,10 +173,7 @@ public class AlgorithmManager {
 
     public static int getJitterSequenceLength() {
         if (SuperResolutionAPI.getCurrentAlgorithm() != null && SuperResolutionAPI.getCurrentAlgorithm().isSupportJitter()) {
-            return Fsr2Utils.ffxFsr2GetJitterPhaseCount(
-                    RenderHandlerManager.getRenderWidth(),
-                    RenderHandlerManager.getScreenWidth()
-            );
+            return getConfiguredJitterSequenceLength();
         }
         return 0;
     }
@@ -175,8 +198,8 @@ public class AlgorithmManager {
                 PerformanceTracker.getLastResultCPU("Frame"),
                 (float) param.verticalFov,
                 (float) Math.tan(param.verticalFov / 2.0) * RenderHandlerManager.getRenderWidth() / RenderHandlerManager.getRenderHeight(),
-                0.05F,
-                Minecraft.getInstance().gameRenderer.getDepthFar(),
+                MinecraftUtils.getCameraNear(),
+                MinecraftUtils.getCameraFar(),
                 jitterOffset,
                 jitterSequenceLength,
                 param.currentModelViewMatrix,
@@ -205,7 +228,6 @@ public class AlgorithmManager {
     }
 
     public static void init() {
-        MotionVectorsGenerator.init();
     }
 
     public static void update() {
